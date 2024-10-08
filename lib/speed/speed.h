@@ -26,11 +26,13 @@ private:
     // for low_pass filter
     float value_Prev = 0;
 
+    float wheel_radius = 0;
 public:
-    Speed();
+    Speed(int one_revolution, int gear_total, float wheel_radius);
     ~Speed();
     void parameter(int one_revolution, int gear_total);
-    float calculate_speed(float count, float deltaT);
+    float calculate_angular_speed(float count, float deltaT);
+    float calculate_linear_speed(float count, float deltaT);
     float calc_speed_lowPass(float count, float deltaT);
     float calc_speed_highPass(float count, float deltaT);
     float calc_speed_bandPass(float count, float deltaT);

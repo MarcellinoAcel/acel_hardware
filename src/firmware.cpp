@@ -17,6 +17,7 @@
 #include "kinematics.h"
 #include "pid.h"
 #include "speed.h"
+#include "imu.h"
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -29,7 +30,19 @@ const int motorCCW = 8;
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
-Speed enc_x, enc_y;
+Speed enc_x(1024, 0, 0.04695);
+Speed enc_y(1024, 0, 0.04695);
+
+void rclErrorLoop();
+void flashLED(int n_times);
+bool destroyEntities();
+void fullStop();
+void syncTime();
+struct timespec getTime();
+void setMotor(int cwPin, int ccwPin, float pwmVal);
+void moveBase();
+void publishData();
+void twistCallback(const void *msgin);
 
 #define RCCHECK(fn)                  \
     {                                \
@@ -111,7 +124,7 @@ Kinematics kinematics(
     ROBOT_DIAMETER);
 
 Odometry odometry;
-
+IMU imu_sensor;
 bool createEntities()
 {
     allocator = rcl_get_default_allocator();
@@ -183,18 +196,14 @@ void readEncoder()
 }
 
 float heading = 0;
-imu::Vector<3> initialEulerAngles;
 void setup()
 {
     pinMode(LED_PIN, OUTPUT);
 
-    enc_x.parameter(1024, 0);
-    enc_y.parameter(1024, 0);
-
     Serial.begin(115200);
     set_microros_serial_transports(Serial);
 
-    while (!bno.begin())
+    while (!imu_sensor.init())
     {
         flashLED(3);
     }
@@ -290,7 +299,6 @@ void moveBase()
 
     float currT = micros();
     float deltaT = ((float)(currT - prevT)) / 1.0e6;
-    prevT = currT;
     // brake if there's no command received, or when it's only the first command sent
     if (((millis() - prev_cmd_time) >= 200))
     {
@@ -306,18 +314,6 @@ void moveBase()
         twist_msg.linear.x,
         twist_msg.linear.y,
         twist_msg.angular.z);
-
-    // get the current speed of each motor
-    float current_rps1 = wheel1.get_vel();
-    float current_rps2 = wheel2.get_vel();
-    float current_rps3 = wheel3.get_vel();
-    float current_rps4 = wheel4.get_vel();
-
-    // Kinematics::velocities current_vel = kinematics.getVelocities(
-    //     current_rps1,
-    //     current_rps2,
-    //     current_rps3,
-    //     current_rps4);
 
     // the required rps is capped at -/+ MAX_rps to prevent the PID from having too much error
     // the PWM value sent to the motor driver is the calculated PID based on required rps vs measured rps
@@ -347,14 +343,14 @@ void moveBase()
     setMotor(cw[1], ccw[1], controlled_motor2);
     setMotor(cw[2], ccw[2], controlled_motor3);
     setMotor(cw[3], ccw[3], controlled_motor1);
-
+    Kinematics::velocities vel = kinematics.getVelocities(
+        wheel1.get_vel(),
+        wheel2.get_vel(),
+        wheel3.get_vel(),
+        wheel4.get_vel());
     Kinematics::position current_pos = kinematics.getPosition(
         pos[4],
         pos[5]);
-
-    Kinematics::velocities current_vel = kinematics.getVelExternal(
-        enc_x.calculate_speed(pos[4], deltaT),
-        enc_y.calculate_speed(pos[5], deltaT));
 
     checking_input_msg.data.data[0] = req_rps.motor1; // 1
     checking_input_msg.data.data[1] = req_rps.motor2; // 2
@@ -362,12 +358,25 @@ void moveBase()
     checking_input_msg.data.data[3] = req_rps.motor4; // 4
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
 
-    checking_output_msg.data.data[0] = current_pos.linear_x;          // 1
-    checking_output_msg.data.data[1] = heading_;                      // 2
-    checking_output_msg.data.data[2] = orientationData.orientation.x; // 3
-    checking_output_msg.data.data[3] = current_pos.angular_z;         // 4
+    x_pos += vel.linear_x * deltaT;
+    y_pos += vel.linear_y * deltaT;
+    heading += vel.angular_z * deltaT;
+    heading_ += angVelocityData.acceleration.heading * deltaT;
+
+    checking_output_msg.data.data[0] = x_pos * cos(current_pos.angular_z) - y_pos * sin(current_pos.angular_z); // 1
+    checking_output_msg.data.data[1] = x_pos * sin(current_pos.angular_z) + y_pos * cos(current_pos.angular_z); // 2
+    checking_output_msg.data.data[2] = current_pos.angular_z;                                                   // 3
+    checking_output_msg.data.data[3] = kinematics.toDeg(heading_);                                              // 4
     RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
-    odometry.update(deltaT,current_vel.linear_x,current_vel.linear_y,current_pos.angular_z);
+
+    odometry.update_position(
+        current_pos.linear_x * 2,
+        current_pos.linear_y * 2,
+        heading_,
+        vel.linear_x,
+        vel.linear_y,
+        vel.angular_z);
+    prevT = currT;
 }
 
 void publishData()
@@ -378,13 +387,7 @@ void publishData()
     bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
 
     odom_msg = odometry.getData();
-    imu_msg.angular_velocity.x = 0.0;
-    imu_msg.angular_velocity.y = 0.0;
-    imu_msg.angular_velocity.z = angVelocityData.gyro.z;
-
-    imu_msg.linear_acceleration.x = linearVelocityData.acceleration.x;
-    imu_msg.linear_acceleration.y = linearVelocityData.acceleration.y;
-    imu_msg.linear_acceleration.z = 0.0;
+    imu_msg = imu_sensor.getData();
 
     struct timespec time_stamp = getTime();
 
@@ -456,11 +459,6 @@ struct timespec getTime()
     return tp;
 }
 
-void rclErrorLoop()
-{
-    flashLED(2);
-}
-
 void flashLED(int n_times)
 {
     for (int i = 0; i < n_times; i++)
@@ -471,4 +469,8 @@ void flashLED(int n_times)
         delay(150);
     }
     delay(1000);
+}
+void rclErrorLoop()
+{
+    flashLED(2);
 }

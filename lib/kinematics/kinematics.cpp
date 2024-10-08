@@ -16,10 +16,13 @@
 #include "kinematics.h"
 #include "math.h"
 
-
 float Kinematics::toRad(float deg)
 {
     return deg * M_PI / 180;
+}
+float Kinematics::toDeg(float rad)
+{
+    return rad * 180 / M_PI;
 }
 
 Kinematics::Kinematics(base robot_base, int motor_max_rps, float max_rps_ratio,
@@ -53,19 +56,19 @@ Kinematics::rps Kinematics::calculateRPS(float linear_x, float linear_y, float a
 
     // calculate for the target motor rps and direction
     // front-left motor
-    float rps_motor1 = sin(toRad(45)) * x_rps + cos(toRad(45)) * y_rps + robot_circumference_ * tan_rps;
+    float rps_motor1 = -sin(toRad(45)) * x_rps + cos(toRad(45)) * y_rps + robot_circumference_ * tan_rps;
     rps.motor1 = fmax(-max_rps_, fmin(rps_motor1, max_rps_));
 
     // front-right motor
-    float rps_motor2 = sin(toRad(135)) * x_rps + cos(toRad(135)) * y_rps + robot_circumference_ * tan_rps;
+    float rps_motor2 = -sin(toRad(135)) * x_rps + cos(toRad(135)) * y_rps + robot_circumference_ * tan_rps;
     rps.motor2 = fmax(-max_rps_, fmin(rps_motor2, max_rps_));
 
     // rear-left motor
-    float rps_motor3 = sin(toRad(225)) * x_rps + cos(toRad(225)) * y_rps + robot_circumference_ * tan_rps;
+    float rps_motor3 = -sin(toRad(225)) * x_rps + cos(toRad(225)) * y_rps + robot_circumference_ * tan_rps;
     rps.motor3 = fmax(-max_rps_, fmin(rps_motor3, max_rps_));
 
     // rear-right motor
-    float rps_motor4 = sin(toRad(315)) * x_rps + cos(toRad(315)) * y_rps + robot_circumference_ * tan_rps;
+    float rps_motor4 = -sin(toRad(315)) * x_rps + cos(toRad(315)) * y_rps + robot_circumference_ * tan_rps;
     rps.motor4 = fmax(-max_rps_, fmin(rps_motor4, max_rps_));
 
     return rps;
@@ -83,22 +86,23 @@ Kinematics::velocities Kinematics::getVelocities(float rps1, float rps2, float r
     float average_rps_y;
     float average_rps_a;
 
-    //convert average revolutions per minute to revolutions per second
-    average_rps_x = ((float)(sin(toRad(45)) * rps1 + sin(toRad(135)) * rps2 + sin(toRad(225)) * rps3 + sin(toRad(315)) * rps4) / total_wheels_); // rps
-    vel.linear_x = average_rps_x * wheel_circumference_; // m/s
+    // convert average revolutions per minute to revolutions per second
+    average_rps_x = ((float)(-sin(toRad(45)) * rps1 - sin(toRad(135)) * rps2 - sin(toRad(225)) * rps3 - sin(toRad(315)) * rps4) / total_wheels_); // rps
+    vel.linear_x = average_rps_x * wheel_circumference_;                                                                                          // m/s
 
-    //convert average revolutions per minute in y axis to revolutions per second
+    // convert average revolutions per minute in y axis to revolutions per second
     average_rps_y = ((float)(cos(toRad(45)) * rps1 + cos(toRad(135)) * rps2 + cos(toRad(225)) * rps3 + cos(toRad(315)) * rps4) / total_wheels_); // rps
-    vel.linear_y = average_rps_y * wheel_circumference_; // m/s
+    vel.linear_y = average_rps_y * wheel_circumference_;                                                                                         // m/s
 
-    //convert average revolutions per minute to revolutions per second
-    average_rps_a = ((float)(-rps1 + rps2 - rps3 + rps4) / total_wheels_);
-    vel.angular_z =  (average_rps_a * wheel_circumference_) / (robot_circumference_); //  rad/s
+    // convert average revolutions per minute to revolutions per second
+    average_rps_a = ((float)(rps1 + rps2 + rps3 + rps4) / total_wheels_);
+    vel.angular_z = (average_rps_a * wheel_circumference_) / (robot_circumference_); //  rad/s
 
     return vel;
 }
 
-Kinematics::position Kinematics::getPosition(float enc_x, float enc_y){
+Kinematics::position Kinematics::getPosition(float enc_x, float enc_y)
+{
     Kinematics::position pos;
     float estimate_x;
     float estimate_y;
@@ -108,7 +112,7 @@ Kinematics::position Kinematics::getPosition(float enc_x, float enc_y){
     estimate_y = (enc_y / total_enc_pulse) * enc_wheel_circumference;
 
     // Using atan2 to handle quadrant issues and prevent division by zero
-    estimate_h = atan2(estimate_y, estimate_x);
+    estimate_h = (estimate_x + estimate_y) / 2 / enc_robot_circumference;
 
     pos.linear_x = estimate_x;
     pos.linear_y = estimate_y;
@@ -116,21 +120,24 @@ Kinematics::position Kinematics::getPosition(float enc_x, float enc_y){
 
     return pos;
 }
-Kinematics::velocities Kinematics::getVelExternal(float vel_x, float vel_y){
-    Kinematics::velocities velEx;
+Kinematics::velocities Kinematics::getVelocities_(float vel_x, float vel_y)
+{
+    Kinematics::velocities vel;
     float estimate_x;
     float estimate_y;
     float estimate_h;
 
-    estimate_x = -vel_x*enc_wheel_circumference;
-    estimate_y = vel_y*enc_wheel_circumference;
-    estimate_h = atan2(vel_y, vel_x);
-    
-    velEx.linear_x = estimate_x;
-    velEx.linear_y = estimate_y;
-    velEx.angular_z = estimate_h;
+    estimate_x = vel_x;
+    estimate_y = vel_y;
+    estimate_h = ((vel_x + vel_y)/2)/enc_robot_circumference;
+    // estimate_h = atan2(vel_y, vel_x);
+    // estimate_h = tan(estimate_x/estimate_y);
 
-    return velEx;
+    vel.linear_x = estimate_x;
+    vel.linear_y = estimate_y;
+    vel.angular_z = estimate_h;
+
+    return vel;
 }
 
 int Kinematics::getTotalWheels(base robot_base)

@@ -23,12 +23,17 @@ Odometry::Odometry() : x_pos_(0.0),
 }
 void Odometry::update_position(float x_pos, float y_pos, float z_pos, float linear_x, float linear_y, float angular_z)
 {
+    float cos_h = cos(z_pos);
+    float sin_h = sin(z_pos);
+    float trans_x = (x_pos * cos_h - x_pos * sin_h); // m
+    float trans_y = (x_pos * sin_h + x_pos * cos_h); // m
+
     float q[4];
     euler_to_quat(0, 0, z_pos, q);
 
     // robot's position in x,y, and z
-    odom_msg_.pose.pose.position.x = x_pos;
-    odom_msg_.pose.pose.position.y = y_pos;
+    odom_msg_.pose.pose.position.x = trans_x;
+    odom_msg_.pose.pose.position.y = trans_y;
     odom_msg_.pose.pose.position.z = 0.0;
 
     // robot's heading in quaternion
@@ -55,18 +60,18 @@ void Odometry::update_position(float x_pos, float y_pos, float z_pos, float line
     odom_msg_.twist.covariance[7] = 0.0001;
     odom_msg_.twist.covariance[35] = 0.0001;
 }
-void Odometry::update(float vel_dt, float linear_vel_x, float linear_vel_y, float angular_vel_z)
+void Odometry::update(float vel_dt, float linear_vel_x, float linear_vel_y, float angular_vel_z, float orient)
 {
-    float delta_heading = angular_vel_z; // radians
-    float cos_h = cos(angular_vel_z);
-    float sin_h = sin(angular_vel_z);
+    float delta_heading = angular_vel_z * vel_dt; // radians
+    float cos_h = cos(orient);
+    float sin_h = sin(orient);
     float delta_x = (linear_vel_x * cos_h - linear_vel_y * sin_h) * vel_dt; // m
     float delta_y = (linear_vel_x * sin_h + linear_vel_y * cos_h) * vel_dt; // m
 
     // calculate current position of the robot
     x_pos_ += delta_x;
     y_pos_ += delta_y;
-    heading_ = delta_heading;
+    heading_ += delta_heading;
 
     // calculate robot's heading in quaternion angle
     // ROS has a function to calculate yaw in quaternion angle

@@ -62,12 +62,13 @@ class Kinematics
         
         position getPosition(float enc_x, float enc_y);
         
-        velocities getVelExternal(float enc1, float enc2);
+        velocities getVelocities_(float enc1, float enc2);
         
         rps getRPS(float linear_x, float linear_y, float angular_z);
         
         float getMaxRPS();
         float toRad(float deg);
+        float toDeg(float rad);
 
     private:
         rps calculateRPS(float linear_x, float linear_y, float angular_z);
@@ -83,7 +84,7 @@ class Kinematics
         float robot_circumference_ = 0.25;
         float enc_wheel_diameter = 4.635 / 100;
         float total_enc_pulse = 1024;
-        float L = 20.325/100;
+        float enc_robot_circumference = 20.325/100;
         float enc_wheel_circumference = enc_wheel_diameter * PI;
 };
 
