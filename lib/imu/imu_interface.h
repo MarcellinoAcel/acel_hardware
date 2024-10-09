@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef IMU_INTERFACE_H
-#define IMU_INTERFACE_H
+#ifndef IMU_INTERFACE
+#define IMU_INTERFACE
 
-#include <Arduino.h>
-#include <micro_ros_platformio.h>
 #include <sensor_msgs/msg/imu.h>
 
-class IMU_INTERFACE
+class IMUInterface
 {
     protected:
         sensor_msgs__msg__Imu imu_msg_;
@@ -53,7 +51,7 @@ class IMU_INTERFACE
         }
    
     public:
-        IMU_INTERFACE()
+        IMUInterface()
         {
             imu_msg_.header.frame_id = micro_ros_string_utilities_set(imu_msg_.header.frame_id, "imu_link");
         }

@@ -1,10 +1,9 @@
 #include "speed.h"
 #include "math.h"
 
-Speed::Speed(int one_revolution, int gear_total, float wheel_radius)
+Speed::Speed(int one_revolution, float wheel_diameter)
     : one_full_rev(one_revolution),
-      total_gear_count(gear_total),
-      wheel_radius(wheel_radius),
+      wheel_diameter(wheel_diameter),
       count_prev(0)
 {
     // Constructor implementation
@@ -18,8 +17,8 @@ Speed::~Speed()
 float Speed::calculate_angular_speed(float count, float deltaT)
 {
 
-    float count_diff = count - count_prev;                        // encoder count menjadid encoder count/second
-    float angular_vel = (count_diff / one_full_rev) * (2 * M_PI); // convert encoder count/second jadi radian/second
+    float count_diff = (count - count_prev) / deltaT;                        // encoder count menjadid encoder count/second
+    float angular_vel = count_diff / one_full_rev; // convert encoder count/second jadi radian/second
     count_prev = count;
     return angular_vel;
 }
@@ -29,7 +28,7 @@ float Speed::calculate_linear_speed(float count, float deltaT)
     float count_diff = count - count_prev; // encoder count menjadid encoder count/second
     count_prev = count;
     float angular_vel = (count_diff / one_full_rev) * (2 * M_PI); // convert encoder count/second jadi radian/second
-    float linear_speed = angular_vel * wheel_radius;
+    float linear_speed = angular_vel * wheel_diameter;
     return linear_speed;
 }
 
@@ -40,7 +39,7 @@ float Speed::calc_speed_lowPass(float count, float deltaT)
 
     float angular_vel = radian / one_full_rev;
 
-    float angular_vel_Filt = 0.854 * angular_vel_Filt + 0.0728 * angular_vel + 0.0728 * angular_vel_Prev;
+    angular_vel_Filt = 0.854 * angular_vel_Filt + 0.0728 * angular_vel + 0.0728 * angular_vel_Prev;
     angular_vel_Prev = angular_vel;
 
     return angular_vel_Filt;
@@ -95,7 +94,7 @@ float Speed::highPass(float value)
 float Speed::lowPass(float value)
 {
 
-    float filtered_value = 0.854 * filtered_value + 0.0728 * value + 0.0728 * value_Prev;
+    filtered_value = 0.854 * filtered_value + 0.0728 * value + 0.0728 * value_Prev;
     value_Prev = value;
 
     return filtered_value;

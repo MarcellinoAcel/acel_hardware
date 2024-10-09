@@ -1,71 +1,86 @@
-#include <Arduino.h>
-#include <imu_interface.h>
+// Copyright (c) 2021 Juan Miguel Jimeno
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef DEFAULT_IMU
+#define DEFAULT_IMU
+
+// include IMU base interface
+#include "imu_interface.h"
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
-class BNO055IMU : public IMU_INTERFACE
+
+// include sensor API headers
+//  #include "I2Cdev.h"
+//  #include "ADXL345.h"
+//  #include "ITG3200.h"
+//  #include "HMC5883L.h"
+//  #include "MPU6050.h"
+//  #include "MPU9150.h"
+//  #include "MPU9250.h"
+class BNO055_IMU : public IMUInterface
 {
-private:
-    // constants specific to the sensor
-    const float accel_scale_ = 1 / 256.0;
-    const float gyro_scale_ = 1 / 14.375;
-
-    // driver objects to be used
-    Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
-
-    // returned vector for sensor reading
-    geometry_msgs__msg__Vector3 accel_;
-    geometry_msgs__msg__Vector3 gyro_;
+    Adafruit_BNO055 bno;
 
 public:
-    BNO055IMU()
-    {
-        // accel_cov_ = 0.001; //you can overwrite the convariance values here
-        // gyro_cov_ = 0.001; //you can overwrite the convariance values here
-    }
+    BNO055_IMU() : bno(Adafruit_BNO055(55, 0x28, &Wire2)) {}
 
     bool startSensor() override
     {
-        // here you can override startSensor() function and use the sensor's driver API
-        // to initialize and test the sensor's connection during boot time
+        // Memulai sensor BNO055
         if (!bno.begin())
         {
+            // Jika gagal inisialisasi, kembalikan false
             return false;
         }
-        return true;
-    }
 
+        // Menunggu sensor untuk melakukan kalibrasi internal
+        delay(1000);
+
+        // Setel mode sensor (opsional, tergantung pada aplikasi Anda)
+        bno.setExtCrystalUse(true);
+
+        return true; // Inisialisasi berhasil
+    }
     geometry_msgs__msg__Vector3 readAccelerometer() override
     {
-        // here you can override readAccelerometer function and use the sensor's driver API
-        // to grab the data from accelerometer and return as a Vector3 object
+        // Membaca data akselerasi dari sensor BNO055
+        sensors_event_t event;
+        bno.getEvent(&event, Adafruit_BNO055::VECTOR_ACCELEROMETER);
 
-        sensors_event_t angVelocityData;
-        bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
+        geometry_msgs__msg__Vector3 accel;
+        accel.x = event.acceleration.x * g_to_accel_; // Konversi ke m/s²
+        accel.y = event.acceleration.y * g_to_accel_;
+        accel.z = event.acceleration.z * g_to_accel_;
 
-        // accelerometer_.getAcceleration(&ax, &ay, &az);
-
-        accel_.x = angVelocityData.acceleration.x * (double)accel_scale_ * g_to_accel_;
-        accel_.y = angVelocityData.acceleration.y * (double)accel_scale_ * g_to_accel_;
-        accel_.z = angVelocityData.acceleration.z * (double)accel_scale_ * g_to_accel_;
-
-        return accel_;
+        return accel;
     }
 
     geometry_msgs__msg__Vector3 readGyroscope() override
     {
-        // here you can override readAccelerometer function and use the sensor's driver API
-        // to grab the data from gyroscope and return as a Vector3 object
-        sensors_event_t orient;
+        // Membaca data giroskop dari sensor BNO055
+        sensors_event_t event;
+        bno.getEvent(&event, Adafruit_BNO055::VECTOR_GYROSCOPE);
 
-        bno.getEvent(&orient, Adafruit_BNO055::VECTOR_EULER);
+        geometry_msgs__msg__Vector3 gyro;
+        gyro.x = event.gyro.x; // Data sudah dalam rad/s
+        gyro.y = event.gyro.y;
+        gyro.z = event.gyro.z;
 
-        gyro_.x = orient.orientation.x * (double)gyro_scale_ * DEG_TO_RAD;
-        gyro_.y = orient.orientation.y * (double)gyro_scale_ * DEG_TO_RAD;
-        gyro_.z = orient.orientation.z * (double)gyro_scale_ * DEG_TO_RAD;
-
-        return gyro_;
+        return gyro;
     }
 };
+#endif

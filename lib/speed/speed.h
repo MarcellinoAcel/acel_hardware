@@ -8,6 +8,7 @@ private:
     float angular_vel_Prev = 0;
     float total_gear_count = 0;
     float one_full_rev = 0;
+    float wheel_diameter = 0;
     float count_prev = 0;
 
     // for high pass filter
@@ -25,10 +26,10 @@ private:
 
     // for low_pass filter
     float value_Prev = 0;
-
-    float wheel_radius = 0;
+    float angular_vel_Filt = 0;
+    float filtered_value = 0;
 public:
-    Speed(int one_revolution, int gear_total, float wheel_radius);
+    Speed(int one_revolution, float wheel_diameter);
     ~Speed();
     void parameter(int one_revolution, int gear_total);
     float calculate_angular_speed(float count, float deltaT);

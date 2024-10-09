@@ -68,9 +68,9 @@ LEFT  = Y
 #define COUNTS_PER_REV2 3840            // wheel2 encoder's no of ticks per rev
 #define COUNTS_PER_REV3 3840            // wheel3 encoder's no of ticks per rev
 #define COUNTS_PER_REV4 3840            // wheel4 encoder's no of ticks per rev
-#define WHEEL_DIAMETER 0.1              // wheel's diameter in meters
-#define ROBOT_DIAMETER 0.5              // distance between left and right wheels
-#define ROBOT_RADIUS 0.05
+#define WHEEL_DIAMETER 0.0985              // wheel's diameter in meters
+#define ROBOT_DIAMETER 0.46              // distance between left and right wheels
+#define ROBOT_RADIUS 0.23
 #define PWM_BITS 8
 #define PWM_FREQUENCY 20000
 

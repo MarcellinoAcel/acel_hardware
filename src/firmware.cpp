@@ -30,8 +30,13 @@ const int motorCCW = 8;
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
-Speed enc_x(1024, 0, 0.04695);
-Speed enc_y(1024, 0, 0.04695);
+Speed enc_x(1024, 0.04695);
+Speed enc_y(1024, 0.04695);
+
+Speed enc1(COUNTS_PER_REV1,WHEEL_DIAMETER);
+Speed enc2(COUNTS_PER_REV2,WHEEL_DIAMETER);
+Speed enc3(COUNTS_PER_REV3,WHEEL_DIAMETER);
+Speed enc4(COUNTS_PER_REV4,WHEEL_DIAMETER);
 
 void rclErrorLoop();
 void flashLED(int n_times);
@@ -107,7 +112,7 @@ enum states
 const int enca[6] = {MOTOR1_ENCODER_A, MOTOR2_ENCODER_A, MOTOR3_ENCODER_A, MOTOR4_ENCODER_A, EXTERNAL_X_ENCODER_A, EXTERNAL_Y_ENCODER_A};
 const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR4_ENCODER_B, EXTERNAL_X_ENCODER_B, EXTERNAL_Y_ENCODER_B};
 
-volatile long pos[6] = {0, 0, 0, 0, 0, 0};
+volatile long pos[6];
 
 PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
@@ -195,7 +200,6 @@ void readEncoder()
     }
 }
 
-float heading = 0;
 void setup()
 {
     pinMode(LED_PIN, OUTPUT);
@@ -284,12 +288,10 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
 
 float prevT = 0;
 float deltaT = 0;
-float x_pos = 0;
-float y_pos = 0;
+float x_pos_ = 0;
+float y_pos_ = 0;
 float heading_ = 0;
 
-// keliling roda encoder 4.635 cm
-// 1024 ppr
 void moveBase()
 {
     sensors_event_t angVelocityData, linearVelocityData, orientationData;
@@ -299,7 +301,7 @@ void moveBase()
 
     float currT = micros();
     float deltaT = ((float)(currT - prevT)) / 1.0e6;
-    // brake if there's no command received, or when it's only the first command sent
+
     if (((millis() - prev_cmd_time) >= 200))
     {
         twist_msg.linear.x = 0.0;
@@ -308,15 +310,18 @@ void moveBase()
 
         digitalWrite(LED_PIN, HIGH);
     }
-    // get the required rps for each motor based on required velocities, and base used
+
     Kinematics::rps req_rps;
     req_rps = kinematics.getRPS(
         twist_msg.linear.x,
         twist_msg.linear.y,
         twist_msg.angular.z);
 
-    // the required rps is capped at -/+ MAX_rps to prevent the PID from having too much error
-    // the PWM value sent to the motor driver is the calculated PID based on required rps vs measured rps
+    float current_rps1 = wheel1.get_filt_vel();
+    float current_rps2 = wheel2.get_filt_vel();
+    float current_rps3 = wheel3.get_filt_vel();
+    float current_rps4 = wheel4.get_filt_vel();
+
     float controlled_motor1 = wheel1.control_speed(req_rps.motor1, pos[0], deltaT);
     float controlled_motor2 = wheel2.control_speed(req_rps.motor2, pos[1], deltaT);
     float controlled_motor3 = wheel3.control_speed(req_rps.motor3, pos[2], deltaT);
@@ -343,48 +348,49 @@ void moveBase()
     setMotor(cw[1], ccw[1], controlled_motor2);
     setMotor(cw[2], ccw[2], controlled_motor3);
     setMotor(cw[3], ccw[3], controlled_motor1);
+
     Kinematics::velocities vel = kinematics.getVelocities(
-        wheel1.get_vel(),
-        wheel2.get_vel(),
-        wheel3.get_vel(),
-        wheel4.get_vel());
-    Kinematics::position current_pos = kinematics.getPosition(
-        pos[4],
-        pos[5]);
+        current_rps1,
+        current_rps2,
+        current_rps3,
+        current_rps4);
 
-    checking_input_msg.data.data[0] = req_rps.motor1; // 1
-    checking_input_msg.data.data[1] = req_rps.motor2; // 2
-    checking_input_msg.data.data[2] = req_rps.motor3; // 3
-    checking_input_msg.data.data[3] = req_rps.motor4; // 4
+    checking_input_msg.data.data[0] = pos[0]; // 1
+    checking_input_msg.data.data[1] = pos[1]; // 2
+    checking_input_msg.data.data[2] = pos[2]; // 3
+    checking_input_msg.data.data[3] = pos[3]; // 4
+
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
-
-    x_pos += vel.linear_x * deltaT;
-    y_pos += vel.linear_y * deltaT;
-    heading += vel.angular_z * deltaT;
-    heading_ += angVelocityData.acceleration.heading * deltaT;
-
-    checking_output_msg.data.data[0] = x_pos * cos(current_pos.angular_z) - y_pos * sin(current_pos.angular_z); // 1
-    checking_output_msg.data.data[1] = x_pos * sin(current_pos.angular_z) + y_pos * cos(current_pos.angular_z); // 2
-    checking_output_msg.data.data[2] = current_pos.angular_z;                                                   // 3
-    checking_output_msg.data.data[3] = kinematics.toDeg(heading_);                                              // 4
-    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
-
-    odometry.update_position(
-        current_pos.linear_x * 2,
-        current_pos.linear_y * 2,
-        heading_,
+    unsigned long now = millis();
+    float vel_dt = (now - prev_odom_update) / 1000.0;
+    prev_odom_update = now;
+    // odometry.update(
+    //     vel_dt,
+    //     vel.linear_x,
+    //     vel.linear_y,
+    //     angVelocityData.gyro.z);
+    odometry.update(
+        vel_dt,
         vel.linear_x,
         vel.linear_y,
-        vel.angular_z);
+        vel.angular_z
+    );
+
+    checking_output_msg.data.data[0] = odometry.get_x_pos_();                          // 1
+    checking_output_msg.data.data[1] = odometry.get_y_pos_();                          // 2
+    checking_output_msg.data.data[2] = kinematics.toDeg(odometry.get_heading_());      // 3
+    checking_output_msg.data.data[3] = kinematics.toDeg(pos[1] * PI * WHEEL_DIAMETER); // 4
+
+    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+
     prevT = currT;
+
+    uint8_t system, gyro, accel, mag = 0;
+    bno.getCalibration(&system, &gyro, &accel, &mag);
 }
 
 void publishData()
 {
-    sensors_event_t angVelocityData, linearVelocityData, orientationData;
-    bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
-    bno.getEvent(&linearVelocityData, Adafruit_BNO055::VECTOR_LINEARACCEL);
-    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
 
     odom_msg = odometry.getData();
     imu_msg = imu_sensor.getData();
@@ -412,11 +418,11 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    rcl_publisher_fini(&odom_publisher, &node);
-    rcl_publisher_fini(&imu_publisher, &node);
-    rcl_subscription_fini(&twist_subscriber, &node);
-    rcl_node_fini(&node);
-    rcl_timer_fini(&control_timer);
+    // rcl_publisher_fini(&odom_publisher, &node);
+    // rcl_publisher_fini(&imu_publisher, &node);
+    // rcl_subscription_fini(&twist_subscriber, &node);
+    // rcl_node_fini(&node);
+    // rcl_timer_fini(&control_timer);
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
 
