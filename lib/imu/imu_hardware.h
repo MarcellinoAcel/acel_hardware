@@ -15,7 +15,6 @@
 #ifndef DEFAULT_IMU
 #define DEFAULT_IMU
 
-// include IMU base interface
 #include "imu_interface.h"
 
 #include <Wire.h>
@@ -23,18 +22,10 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-// include sensor API headers
-//  #include "I2Cdev.h"
-//  #include "ADXL345.h"
-//  #include "ITG3200.h"
-//  #include "HMC5883L.h"
-//  #include "MPU6050.h"
-//  #include "MPU9150.h"
-//  #include "MPU9250.h"
 class BNO055_IMU : public IMUInterface
 {
     Adafruit_BNO055 bno;
-    uint16_t BNO055_SAMPLERATE_DELAY_MS = 10; 
+    uint16_t BNO055_SAMPLERATE_DELAY_MS = 10;
     double ACCEL_VEL_TRANSITION = (double)(BNO055_SAMPLERATE_DELAY_MS) / 1000.0;
     double ACCEL_POS_TRANSITION = 0.5 * ACCEL_VEL_TRANSITION * ACCEL_VEL_TRANSITION;
 
@@ -43,33 +34,27 @@ public:
 
     bool startSensor() override
     {
-        // Memulai sensor BNO055
         if (!bno.begin())
         {
             return false;
         }
-        // Menunggu sensor untuk melakukan kalibrasi internal
         delay(1000);
-        // Setel mode sensor (opsional, tergantung pada aplikasi Anda)
         bno.setExtCrystalUse(true);
 
-        return true; // Inisialisasi berhasil
+        return true;
     }
     geometry_msgs__msg__Vector3 readAccelerometer() override
     {
-        // Membaca data akselerasi dari sensor BNO055
         sensors_event_t event;
         bno.getEvent(&event, Adafruit_BNO055::VECTOR_LINEARACCEL);
         geometry_msgs__msg__Vector3 accel;
         accel.x = event.acceleration.x; // Konversi ke m/s²
         accel.y = event.acceleration.y;
         accel.z = event.acceleration.z;
-        // linearAccelData.acceleration.x
         return accel;
     }
     geometry_msgs__msg__Vector3 readGyroscope() override
     {
-        // Membaca data giroskop dari sensor BNO055
         sensors_event_t event;
         bno.getEvent(&event, Adafruit_BNO055::VECTOR_GYROSCOPE);
 

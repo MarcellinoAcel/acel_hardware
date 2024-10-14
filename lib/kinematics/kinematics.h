@@ -46,7 +46,7 @@ public:
         float linear_y;
         float angular_z;
     };
-    
+
     struct position
     {
         float linear_x;
@@ -163,27 +163,49 @@ private:
         // convert rad/s to rad/min
         float tangential_vel_mins = tangential_vel;
 
-        float x_rps = linear_vel_x_mins;
-        float y_rps = linear_vel_y_mins;
-        float tan_rps = tangential_vel_mins;
+        float x_mps = linear_vel_x_mins / wheel_circumference_;
+        float y_mps = linear_vel_y_mins / wheel_circumference_;
+        float tan_mps = tangential_vel_mins / wheel_circumference_;
+
+        float a_x_mps = fabs(x_mps);
+        float a_y_mps = fabs(y_mps);
+        float a_tan_mps = fabs(tan_mps);
+
+        float xy_sum = a_x_mps + a_y_mps;
+        float xtan_sum = a_x_mps + a_tan_mps;
+        if (xy_sum >= max_rps_ && angular_z == 0)
+        {
+            float vel_scaler = max_rps_ / xy_sum;
+
+            x_mps *= vel_scaler;
+            y_mps *= vel_scaler;
+        }
+
+        else if (xtan_sum >= max_rps_ && linear_y == 0)
+        {
+            float vel_scaler = max_rps_ / xtan_sum;
+
+            x_mps *= vel_scaler;
+            tan_mps *= vel_scaler;
+        }
 
         Kinematics::rps rps;
 
         // calculate for the target motor rps and direction
         // front-left motor
-        float rps_motor1 = -sin(toRad(45)) * x_rps + cos(toRad(45)) * y_rps + robot_radius_ * tan_rps;
+        float rps_motor1 = -sin(toRad(45)) * x_mps + cos(toRad(45)) * y_mps + robot_radius_ * tan_mps;
         rps.motor1 = fmax(-max_rps_, fmin(rps_motor1, max_rps_));
 
-        // front-right motor
-        float rps_motor2 = -sin(toRad(135)) * x_rps + cos(toRad(135)) * y_rps + robot_radius_ * tan_rps;
+        // rear-left motor
+        float rps_motor2 = -sin(toRad(135)) * x_mps + cos(toRad(135)) * y_mps + robot_radius_ * tan_mps;
         rps.motor2 = fmax(-max_rps_, fmin(rps_motor2, max_rps_));
 
-        // rear-left motor
-        float rps_motor3 = -sin(toRad(225)) * x_rps + cos(toRad(225)) * y_rps + robot_radius_ * tan_rps;
+        // rear-right motor
+        float rps_motor3 = -sin(toRad(225)) * x_mps + cos(toRad(225)) * y_mps + robot_radius_ * tan_mps;
         rps.motor3 = fmax(-max_rps_, fmin(rps_motor3, max_rps_));
 
-        // rear-right motor
-        float rps_motor4 = -sin(toRad(315)) * x_rps + cos(toRad(315)) * y_rps + robot_radius_ * tan_rps;
+        // front-right motor
+        float rps_motor4 = -sin(toRad(315)) * x_mps + cos(toRad(315)) * y_mps + robot_radius_ * tan_mps;
         rps.motor4 = fmax(-max_rps_, fmin(rps_motor4, max_rps_));
 
         return rps;

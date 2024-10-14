@@ -11,20 +11,17 @@ private:
     float wheel_diameter = 0;
     float count_prev = 0;
 
-    // for high pass filter
     float EMA_a = 0.3;
     float EMA_s = 0;
     float highpass = 0;
 
-    // for band_pass filter
     float bandpass = 0;
-    float EMA_a_low = 0.3; // initialization of EMA alpha
+    float EMA_a_low = 0.3;
     float EMA_a_high = 0.5;
 
-    int EMA_S_low = 0; // initialization of EMA S
+    int EMA_S_low = 0;
     int EMA_S_high = 0;
 
-    // for low_pass filter
     float value_Prev = 0;
     float angular_vel_Filt = 0;
     float filtered_value = 0;

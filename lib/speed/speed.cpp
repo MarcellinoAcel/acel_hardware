@@ -6,28 +6,26 @@ Speed::Speed(int one_revolution, float wheel_diameter)
       wheel_diameter(wheel_diameter),
       count_prev(0)
 {
-    // Constructor implementation
 }
 
 Speed::~Speed()
 {
-    // Destructor implementation
 }
 
 float Speed::calculate_angular_speed(float count, float deltaT)
 {
 
-    float count_diff = (count - count_prev) / deltaT;                        // encoder count menjadid encoder count/second
-    float angular_vel = count_diff / one_full_rev; // convert encoder count/second jadi radian/second
+    float count_diff = (count - count_prev) / deltaT;
+    float angular_vel = count_diff / one_full_rev; 
     count_prev = count;
     return angular_vel;
 }
 float Speed::calculate_linear_speed(float count, float deltaT)
 {
 
-    float count_diff = count - count_prev; // encoder count menjadid encoder count/second
+    float count_diff = count - count_prev;
     count_prev = count;
-    float angular_vel = (count_diff / one_full_rev) * (2 * M_PI); // convert encoder count/second jadi radian/second
+    float angular_vel = (count_diff / one_full_rev) * (2 * M_PI);
     float linear_speed = angular_vel * wheel_diameter;
     return linear_speed;
 }

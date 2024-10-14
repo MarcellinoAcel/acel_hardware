@@ -329,19 +329,19 @@ void moveBase()
 
     if (fabs(req_rps.motor1) < 0.02)
     {
-        controlled_motor1 = 0;
+        controlled_motor1 = 0.0;
     }
     if (fabs(req_rps.motor2) < 0.02)
     {
-        controlled_motor2 = 0;
+        controlled_motor2 = 0.0;
     }
     if (fabs(req_rps.motor3) < 0.02)
     {
-        controlled_motor3 = 0;
+        controlled_motor3 = 0.0;
     }
     if (fabs(req_rps.motor4) < 0.02)
     {
-        controlled_motor4 = 0;
+        controlled_motor4 = 0.0;
     }
 
     setMotor(cw[0], ccw[0], controlled_motor4);
@@ -355,20 +355,15 @@ void moveBase()
         current_rps3,
         current_rps4);
 
-    checking_input_msg.data.data[0] = pos[0]; // 1
-    checking_input_msg.data.data[1] = pos[1]; // 2
-    checking_input_msg.data.data[2] = pos[2]; // 3
-    checking_input_msg.data.data[3] = pos[3]; // 4
+    checking_input_msg.data.data[0] = controlled_motor1; // 1
+    checking_input_msg.data.data[1] = controlled_motor2; // 2
+    checking_input_msg.data.data[2] = controlled_motor3; // 3
+    checking_input_msg.data.data[3] = controlled_motor4; // 4
 
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
     unsigned long now = millis();
     float vel_dt = (now - prev_odom_update) / 1000.0;
     prev_odom_update = now;
-    // odometry.update(
-    //     vel_dt,
-    //     vel.linear_x,
-    //     vel.linear_y,
-    //     angVelocityData.gyro.z);
     odometry.update(
         vel_dt,
         vel.linear_x,
