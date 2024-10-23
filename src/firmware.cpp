@@ -154,7 +154,7 @@ bool createEntities()
         &twist_subscriber,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-        "/omni_cont/cmd_vel"));
+        "omni_cont/cmd_vel"));
     // trouble shooting
     RCCHECK(rclc_publisher_init_default(
         &checking_output_motor,
