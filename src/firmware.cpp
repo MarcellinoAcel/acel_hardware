@@ -33,10 +33,10 @@ Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 Speed enc_x(1024, 0.04695);
 Speed enc_y(1024, 0.04695);
 
-Speed enc1(COUNTS_PER_REV1,WHEEL_DIAMETER);
-Speed enc2(COUNTS_PER_REV2,WHEEL_DIAMETER);
-Speed enc3(COUNTS_PER_REV3,WHEEL_DIAMETER);
-Speed enc4(COUNTS_PER_REV4,WHEEL_DIAMETER);
+Speed enc1(COUNTS_PER_REV1, WHEEL_DIAMETER);
+Speed enc2(COUNTS_PER_REV2, WHEEL_DIAMETER);
+Speed enc3(COUNTS_PER_REV3, WHEEL_DIAMETER);
+Speed enc4(COUNTS_PER_REV4, WHEEL_DIAMETER);
 
 void rclErrorLoop();
 void flashLED(int n_times);
@@ -154,7 +154,7 @@ bool createEntities()
         &twist_subscriber,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-        "cmd_vel"));
+        "/omni_cont/cmd_vel"));
     // trouble shooting
     RCCHECK(rclc_publisher_init_default(
         &checking_output_motor,
@@ -292,6 +292,16 @@ float x_pos_ = 0;
 float y_pos_ = 0;
 float heading_ = 0;
 
+Kinematics::velocities base_position_control(float x, float y, float z)
+{
+
+    Kinematics::rps req_rps = kinematics.getRPS(
+        twist_msg.linear.x,
+        twist_msg.linear.y,
+        twist_msg.angular.z);
+        
+}
+
 void moveBase()
 {
     sensors_event_t angVelocityData, linearVelocityData, orientationData;
@@ -317,15 +327,15 @@ void moveBase()
         twist_msg.linear.y,
         twist_msg.angular.z);
 
-    float current_rps1 = wheel1.get_filt_vel();
-    float current_rps2 = wheel2.get_filt_vel();
-    float current_rps3 = wheel3.get_filt_vel();
-    float current_rps4 = wheel4.get_filt_vel();
-
     float controlled_motor1 = wheel1.control_speed(req_rps.motor1, pos[0], deltaT);
     float controlled_motor2 = wheel2.control_speed(req_rps.motor2, pos[1], deltaT);
     float controlled_motor3 = wheel3.control_speed(req_rps.motor3, pos[2], deltaT);
     float controlled_motor4 = wheel4.control_speed(req_rps.motor4, pos[3], deltaT);
+
+    float current_rps1 = wheel1.get_filt_vel();
+    float current_rps2 = wheel2.get_filt_vel();
+    float current_rps3 = wheel3.get_filt_vel();
+    float current_rps4 = wheel4.get_filt_vel();
 
     if (fabs(req_rps.motor1) < 0.02)
     {
@@ -355,12 +365,12 @@ void moveBase()
         current_rps3,
         current_rps4);
 
-    checking_input_msg.data.data[0] = controlled_motor1; // 1
-    checking_input_msg.data.data[1] = controlled_motor2; // 2
-    checking_input_msg.data.data[2] = controlled_motor3; // 3
-    checking_input_msg.data.data[3] = controlled_motor4; // 4
+    checking_input_msg.data.data[0] = req_rps.motor1; // 1
+    checking_input_msg.data.data[1] = req_rps.motor2; // 2
+    checking_input_msg.data.data[2] = req_rps.motor3; // 3
+    checking_input_msg.data.data[3] = req_rps.motor4; // 4
 
-    RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
+    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
     unsigned long now = millis();
     float vel_dt = (now - prev_odom_update) / 1000.0;
     prev_odom_update = now;
@@ -368,15 +378,14 @@ void moveBase()
         vel_dt,
         vel.linear_x,
         vel.linear_y,
-        vel.angular_z
-    );
+        vel.angular_z);
 
-    checking_output_msg.data.data[0] = odometry.get_x_pos_();                          // 1
-    checking_output_msg.data.data[1] = odometry.get_y_pos_();                          // 2
-    checking_output_msg.data.data[2] = kinematics.toDeg(odometry.get_heading_());      // 3
-    checking_output_msg.data.data[3] = kinematics.toDeg(pos[1] * PI * WHEEL_DIAMETER); // 4
+    checking_output_msg.data.data[0] = current_rps1;// 1
+    checking_output_msg.data.data[1] = current_rps2;// 2
+    checking_output_msg.data.data[2] = current_rps3;// 3
+    checking_output_msg.data.data[3] = current_rps4;// 4
 
-    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+    RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
 
     prevT = currT;
 
