@@ -16,7 +16,7 @@ It is assumed that you already have ROS2 and linorobot2 package installed. If yo
 ### 2. Download linorobot2_hardware
 
     cd $HOME
-    git clone https://github.com/MarcellinoAcel/Acel_robot_hardware.git -b $ROS_DISTRO
+    git clone https://github.com/MarcellinoAcel/Acel_robot_hardware.git -b Marcel_updateing
 
 ### 3. Install PlatformIO
 Download and install platformio. [Platformio](https://platformio.org/) allows you to develop, configure, and upload the firmware without the Arduino IDE. This means that you can upload the firmware remotely which is ideal on headless setup especially when all components have already been fixed. 
