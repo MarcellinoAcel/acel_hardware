@@ -21,7 +21,6 @@
 //  #define LINO_BASE SKID_STEER            // 4WD robot
 //  #define LINO_BASE MECANUM               // Mecanum drive robot
 #define LINO_BASE OMNI
-// const int OMNI = 4;
 
 // uncomment the motor driver you're using
 //  #define USE_GENERIC_2_IN_MOTOR_DRIVER      // Motor drivers with 2 Direction Pins(INA, INB) and 1 PWM(ENABLE) pin ie. L298, L293, VNH5019
@@ -36,7 +35,7 @@
 //  #define USE_MPU9250_IMU
 #define USE_BNO055_IMU
 
-#define K_P 10
+#define K_P 50
 #define K_I 100
 #define K_D 0
 
@@ -44,7 +43,7 @@
 ROBOT ORIENTATION
          FRONT
     MOTOR1  MOTOR2  (2WD/ACKERMANN)
-    MOTOR3  MOTOR4  (4WD/MECANUM)
+    MOTOR3  MOTOR4  (4WD1/MECANUM)
          BACK
 */
 
@@ -60,7 +59,7 @@ LEFT  = Y
 
 // define your robot' specs here
 #define MOTOR_MAX_RPS 8.4               // motor's max RPM
-#define MAX_RPS_RATIO 0.85              // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
+#define MAX_RPS_RATIO 0.9               // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
 #define MOTOR_OPERATING_VOLTAGE 24      // motor's operating voltage (used to calculate max RPM)
 #define MOTOR_POWER_MAX_VOLTAGE 23.5    // max voltage of the motor's power source (used to calculate max RPM)
 #define MOTOR_POWER_MEASURED_VOLTAGE 24 // current voltage reading of the power connected to the motor (used for calibration)
