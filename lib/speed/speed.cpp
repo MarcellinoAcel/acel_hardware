@@ -1,27 +1,33 @@
 #include "speed.h"
+#include "math.h"
 
-
-Speed::Speed() {
-    // Constructor implementation
-}
-
-Speed::~Speed() {
-    // Destructor implementation
-}
-
-void Speed::parameter(int one_revolution, int gear_total)
+Speed::Speed(int one_revolution, float wheel_diameter)
+    : one_full_rev(one_revolution),
+      wheel_diameter(wheel_diameter),
+      count_prev(0)
 {
-    total_gear_count = gear_total;
-    one_full_rev = one_revolution;
 }
 
-float Speed::calculate_speed(float count, float deltaT)
+Speed::~Speed()
+{
+}
+
+float Speed::calculate_angular_speed(float count, float deltaT)
 {
 
-    float radian = (count - count_prev) / deltaT; // encoder count menjadid encoder count/second
+    float count_diff = (count - count_prev) / deltaT;
+    float angular_vel = count_diff / one_full_rev; 
     count_prev = count;
-    float angular_vel = radian / one_full_rev; // convert encoder count/second jadi radian/second
     return angular_vel;
+}
+float Speed::calculate_linear_speed(float count, float deltaT)
+{
+
+    float count_diff = count - count_prev;
+    count_prev = count;
+    float angular_vel = (count_diff / one_full_rev) * (2 * M_PI);
+    float linear_speed = angular_vel * wheel_diameter;
+    return linear_speed;
 }
 
 float Speed::calc_speed_lowPass(float count, float deltaT)
@@ -31,7 +37,7 @@ float Speed::calc_speed_lowPass(float count, float deltaT)
 
     float angular_vel = radian / one_full_rev;
 
-    float angular_vel_Filt = 0.854 * angular_vel_Filt + 0.0728 * angular_vel + 0.0728 * angular_vel_Prev;
+    angular_vel_Filt = 0.854 * angular_vel_Filt + 0.0728 * angular_vel + 0.0728 * angular_vel_Prev;
     angular_vel_Prev = angular_vel;
 
     return angular_vel_Filt;
@@ -65,7 +71,8 @@ float Speed::calc_speed_bandPass(float count, float deltaT)
     return bandpass;
 }
 
-float Speed::bandPass(float value){
+float Speed::bandPass(float value)
+{
     EMA_S_low = (EMA_a_low * value) + ((1 - EMA_a_low) * EMA_S_low);
     EMA_S_high = (EMA_a_high * value) + ((1 - EMA_a_high) * EMA_S_high);
 
@@ -75,16 +82,18 @@ float Speed::bandPass(float value){
     return bandpass;
 }
 
-float Speed::highPass(float value){
+float Speed::highPass(float value)
+{
     EMA_s = (EMA_a * value) + ((1 - EMA_a) * EMA_s);
     highpass = value - EMA_s;
     return highpass;
 }
 
-float Speed::lowPass(float value){
- 
-    float filtered_value = 0.854 * filtered_value + 0.0728 * value + 0.0728 * value_Prev;
+float Speed::lowPass(float value)
+{
+
+    filtered_value = 0.854 * filtered_value + 0.0728 * value + 0.0728 * value_Prev;
     value_Prev = value;
 
-    return filtered_value;   
+    return filtered_value;
 }
