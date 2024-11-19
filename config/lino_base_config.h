@@ -35,8 +35,8 @@
 //  #define USE_MPU9250_IMU
 #define USE_BNO055_IMU
 
-#define K_P 50
-#define K_I 100
+#define K_P 55
+#define K_I 0.045454545
 #define K_D 0
 
 /*
@@ -59,7 +59,7 @@ LEFT  = Y
 
 // define your robot' specs here
 #define MOTOR_MAX_RPS 8.4               // motor's max RPM
-#define MAX_RPS_RATIO 0.9               // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
+#define MAX_RPS_RATIO 0.95              // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
 #define MOTOR_OPERATING_VOLTAGE 24      // motor's operating voltage (used to calculate max RPM)
 #define MOTOR_POWER_MAX_VOLTAGE 23.5    // max voltage of the motor's power source (used to calculate max RPM)
 #define MOTOR_POWER_MEASURED_VOLTAGE 24 // current voltage reading of the power connected to the motor (used for calibration)
@@ -67,8 +67,8 @@ LEFT  = Y
 #define COUNTS_PER_REV2 3840            // wheel2 encoder's no of ticks per rev
 #define COUNTS_PER_REV3 3840            // wheel3 encoder's no of ticks per rev
 #define COUNTS_PER_REV4 3840            // wheel4 encoder's no of ticks per rev
-#define WHEEL_DIAMETER 0.0985              // wheel's diameter in meters
-#define ROBOT_DIAMETER 0.46              // distance between left and right wheels
+#define WHEEL_DIAMETER 0.0985           // wheel's diameter in meters
+#define ROBOT_DIAMETER 0.46             // distance between left and right wheels
 #define ROBOT_RADIUS 0.23
 #define PWM_BITS 8
 #define PWM_FREQUENCY 20000

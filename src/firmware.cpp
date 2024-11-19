@@ -288,27 +288,9 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
 
 float prevT = 0;
 float deltaT = 0;
-float x_pos_ = 0;
-float y_pos_ = 0;
-float heading_ = 0;
-
-Kinematics::velocities base_position_control(float x, float y, float z)
-{
-
-    Kinematics::rps req_rps = kinematics.getRPS(
-        twist_msg.linear.x,
-        twist_msg.linear.y,
-        twist_msg.angular.z);
-        
-}
 
 void moveBase()
 {
-    sensors_event_t angVelocityData, linearVelocityData, orientationData;
-    bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
-    bno.getEvent(&linearVelocityData, Adafruit_BNO055::VECTOR_LINEARACCEL);
-    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-
     float currT = micros();
     float deltaT = ((float)(currT - prevT)) / 1.0e6;
 
@@ -365,10 +347,10 @@ void moveBase()
         current_rps3,
         current_rps4);
 
-    checking_input_msg.data.data[0] = req_rps.motor1; // 1
-    checking_input_msg.data.data[1] = req_rps.motor2; // 2
-    checking_input_msg.data.data[2] = req_rps.motor3; // 3
-    checking_input_msg.data.data[3] = req_rps.motor4; // 4
+    checking_input_msg.data.data[0] = fabs(req_rps.motor1); // 1
+    checking_input_msg.data.data[1] = fabs(req_rps.motor2); // 2
+    checking_input_msg.data.data[2] = fabs(req_rps.motor3); // 3
+    checking_input_msg.data.data[3] = fabs(req_rps.motor4); // 4
 
     RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
     unsigned long now = millis();
@@ -380,10 +362,10 @@ void moveBase()
         vel.linear_y,
         vel.angular_z);
 
-    checking_output_msg.data.data[0] = current_rps1;// 1
-    checking_output_msg.data.data[1] = current_rps2;// 2
-    checking_output_msg.data.data[2] = current_rps3;// 3
-    checking_output_msg.data.data[3] = current_rps4;// 4
+    checking_output_msg.data.data[0] = fabs(current_rps1);// 1
+    checking_output_msg.data.data[1] = fabs(current_rps2);// 2
+    checking_output_msg.data.data[2] = fabs(current_rps3);// 3
+    checking_output_msg.data.data[3] = fabs(current_rps4);// 4
 
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
 

@@ -154,8 +154,8 @@ private:
     rps calculateRPS(float linear_x, float linear_y, float angular_z)
     {
 
-        // float tangential_vel = angular_z * (robot_circumference_);
-        float tangential_vel = angular_z;
+        float tangential_vel = angular_z * (robot_circumference_);
+        // float tangential_vel = angular_z;
 
         // convert m/s to m/min
         float linear_vel_x_mins = linear_x;
