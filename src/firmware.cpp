@@ -114,9 +114,9 @@ const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR
 
 volatile long pos[6];
 
-PID wheel1(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
+PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
-PID wheel3(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
+PID wheel3(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel4(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 
 Kinematics kinematics(
