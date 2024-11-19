@@ -114,9 +114,9 @@ const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR
 
 volatile long pos[6];
 
-PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID wheel1(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
-PID wheel3(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID wheel3(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
 PID wheel4(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 
 Kinematics kinematics(
@@ -288,6 +288,19 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
 
 float prevT = 0;
 float deltaT = 0;
+float x_pos_ = 0;
+float y_pos_ = 0;
+float heading_ = 0;
+
+Kinematics::velocities base_position_control(float x, float y, float z)
+{
+
+    Kinematics::rps req_rps = kinematics.getRPS(
+        twist_msg.linear.x,
+        twist_msg.linear.y,
+        twist_msg.angular.z);
+        
+}
 
 void moveBase()
 {
@@ -362,10 +375,10 @@ void moveBase()
         vel.linear_y,
         vel.angular_z);
 
-    checking_output_msg.data.data[0] = fabs(current_rps1);// 1
-    checking_output_msg.data.data[1] = fabs(current_rps2);// 2
-    checking_output_msg.data.data[2] = fabs(current_rps3);// 3
-    checking_output_msg.data.data[3] = fabs(current_rps4);// 4
+    checking_output_msg.data.data[0] = current_rps1;// 1
+    checking_output_msg.data.data[1] = current_rps2;// 2
+    checking_output_msg.data.data[2] = current_rps3;// 3
+    checking_output_msg.data.data[3] = current_rps4;// 4
 
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
 
