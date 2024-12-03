@@ -23,7 +23,13 @@ private:
   float lowpass_prev = 0;
   float radian = 0;
   float eProportional;
-
+  struct e{
+    float proportional;
+    float integral;
+    float derivative;
+    float u;
+    float previous;
+  }speed;
 public:
 
   PID(float MIN_VAL, float MAX_VAL, float kp_, float ki_, float kd_) : min_val_(MIN_VAL),
@@ -106,15 +112,15 @@ public:
 
     /*hitung pid*/
     // ubah angular_vel_Filt menjadi angular_vel jika ingin menghitung tanpa filter
-    float error = target - angular_vel_Filt;
+    speed.proportional = target - angular_vel_Filt;
 
-    error_integral += error * deltaT;
+    speed.integral += speed.proportional * deltaT;
 
-    float error_derivative = (error - error_previous) / deltaT;
-    error_previous = error;
+    speed.derivative = (speed.proportional - speed.previous) / deltaT;
+    speed.previous = speed.proportional;
 
-    float u = KP * error + KI * error_integral + KD * error_derivative;
-    return fmax(min_val_, fmin(u, max_val_));
+    speed.u = KP * speed.proportional + KI * speed.integral + KD * speed.derivative;
+    return fmax(min_val_, fmin(speed.u, max_val_));
   }
   float control_default(float target, float curr, float deltaT)
   {
@@ -135,6 +141,23 @@ public:
 
     return lowpass_filt;
   }
+
+  float get_error() const{
+    return speed.proportional;
+  }
+
+  float get_error_int() const{
+    return speed.integral;
+  }
+
+  float get_error_der() const{
+    return speed.derivative;
+  }
+
+  float get_pid_out() const{
+    return speed.u;
+  }
+
   float get_filt_vel() const
   {
     return angular_vel_Filt;

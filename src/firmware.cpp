@@ -24,10 +24,6 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-const int motorPWM = 6;
-const int motorCW = 7;
-const int motorCCW = 8;
-
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
 Speed enc_x(1024, 0.04695);
@@ -115,10 +111,10 @@ const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR
 
 volatile long pos[6];
 
-PID wheel1(PWM_MIN, PWM_MAX, K_P +4, K_I+5, K_D);
-PID wheel2(PWM_MIN, PWM_MAX, K_P-2, K_I-2, K_D);
-PID wheel3(PWM_MIN, PWM_MAX, K_P+4, K_I+5, K_D);
-PID wheel4(PWM_MIN, PWM_MAX, K_P+4, K_I +5, K_D);
+PID wheel1(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
+PID wheel2(PWM_MIN, PWM_MAX, K_P - 2, K_I - 2, K_D);
+PID wheel3(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
+PID wheel4(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
 Kinematics kinematics(
     Kinematics::LINO_BASE,
     MOTOR_MAX_RPS,
@@ -359,10 +355,10 @@ void moveBase()
         vel.linear_y,
         vel.angular_z);
 
-    checking_output_msg.data.data[0] = fabs(wheel1.get_filt_vel());// 1
-    checking_output_msg.data.data[1] = fabs(wheel2.get_filt_vel());// 2
-    checking_output_msg.data.data[2] = fabs(wheel3.get_filt_vel());// 3
-    checking_output_msg.data.data[3] = fabs(wheel4.get_filt_vel());// 4
+    checking_output_msg.data.data[0] = wheel1.get_error();     // 1
+    checking_output_msg.data.data[1] = wheel1.get_error_int(); // 2
+    checking_output_msg.data.data[2] = wheel1.get_error_der(); // 3
+    checking_output_msg.data.data[3] = wheel1.get_pid_out();   // 4
 
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
 
