@@ -80,12 +80,14 @@ rcl_publisher_t imu_publisher;
 rcl_subscription_t twist_subscriber;
 rcl_publisher_t checking_output_motor;
 rcl_publisher_t checking_input_motor;
+rcl_publisher_t sending_;
 
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
 std_msgs__msg__Float32MultiArray checking_output_msg;
 std_msgs__msg__Float32MultiArray checking_input_msg;
+std_msgs__msg__Float32MultiArray sending_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -166,6 +168,15 @@ bool createEntities()
         "checking_input"));
     checking_input_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
     checking_input_msg.data.size = 4;
+    // tuning pid
+    RCCHECK(rclc_publisher_init_default(
+        &sending_,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
+        "data_for_regres"));
+    sending_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
+    sending_msg.data.size = 4;
+
     executor = rclc_executor_get_zero_initialized_executor();
     RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
     RCCHECK(rclc_executor_add_subscription(
@@ -355,12 +366,17 @@ void moveBase()
         vel.linear_y,
         vel.angular_z);
 
-    checking_output_msg.data.data[0] = wheel1.get_error();     // 1
-    checking_output_msg.data.data[1] = wheel1.get_error_int(); // 2
-    checking_output_msg.data.data[2] = wheel1.get_error_der(); // 3
-    checking_output_msg.data.data[3] = wheel1.get_pid_out();   // 4
+    checking_output_msg.data.data[0] = fabs(wheel1.get_filt_vel()); // 1
+    checking_output_msg.data.data[1] = fabs(wheel2.get_filt_vel()); // 2
+    checking_output_msg.data.data[2] = fabs(wheel3.get_filt_vel()); // 3
+    checking_output_msg.data.data[3] = fabs(wheel4.get_filt_vel()); // 4
 
     RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
+
+    sending_msg.data.data[0] = wheel1.get_error();     // 1
+    sending_msg.data.data[1] = wheel1.get_error_int(); // 2
+    sending_msg.data.data[2] = wheel1.get_error_der(); // 3
+    sending_msg.data.data[3] = wheel1.get_pid_out();   // 4
 
     prevT = currT;
 
