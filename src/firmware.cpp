@@ -113,10 +113,10 @@ const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR
 
 volatile long pos[6];
 
-PID wheel1(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
-PID wheel2(PWM_MIN, PWM_MAX, K_P - 2, K_I - 2, K_D);
-PID wheel3(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
-PID wheel4(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
+PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID wheel3(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID wheel4(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 
 PID dribble(PWM_MIN, PWM_MAX, drib_kp, drib_ki, drib_kd);
 
@@ -416,7 +416,7 @@ void moveBase()
     sending_msg.data.data[3] = wheel1.get_pid_out();   // 4
 
     RCSOFTCHECK(rcl_publish(&sending_, &sending_msg, NULL));
-    
+
     prevT = currT;
 
     uint8_t system, gyro, accel, mag = 0;
