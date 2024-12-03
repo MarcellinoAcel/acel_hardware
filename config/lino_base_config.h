@@ -35,9 +35,9 @@
 //  #define USE_MPU9250_IMU
 #define USE_BNO055_IMU
 
-#define K_P 55
-#define K_I 0.045454545
-#define K_D 0
+#define K_P 90 // 55
+#define K_I 366.101694915 // 0.045454545
+#define K_D 0// 0
 
 /*
 ROBOT ORIENTATION
@@ -59,9 +59,9 @@ LEFT  = Y
 
 // define your robot' specs here
 #define MOTOR_MAX_RPS 8.4               // motor's max RPM
-#define MAX_RPS_RATIO 0.95              // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
+#define MAX_RPS_RATIO 1.3              // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
 #define MOTOR_OPERATING_VOLTAGE 24      // motor's operating voltage (used to calculate max RPM)
-#define MOTOR_POWER_MAX_VOLTAGE 23.5    // max voltage of the motor's power source (used to calculate max RPM)
+#define MOTOR_POWER_MAX_VOLTAGE 24      // max voltage of the motor's power source (used to calculate max RPM)
 #define MOTOR_POWER_MEASURED_VOLTAGE 24 // current voltage reading of the power connected to the motor (used for calibration)
 #define COUNTS_PER_REV1 3840            // wheel1 encoder's no of ticks per rev
 #define COUNTS_PER_REV2 3840            // wheel2 encoder's no of ticks per rev
