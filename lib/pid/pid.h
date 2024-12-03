@@ -29,7 +29,7 @@ private:
     float derivative;
     float u;
     float previous;
-  }speed;
+  }err;
 public:
 
   PID(float MIN_VAL, float MAX_VAL, float kp_, float ki_, float kd_) : min_val_(MIN_VAL),
@@ -55,23 +55,20 @@ public:
     kdT = kd_;
   }
 
-  float control_angle(float target, float enc, float deltaT)
-  {
-    float error = target - enc;
-    float error_trans = error;
-    if (error_trans > 180)
-    {
-      error_trans -= 360;
+  
+  float control_angle(float target, float enc, float pwm, float deltaT) {
+    float deg2target = (target / 360) * 3840;
+    err.proportional = deg2target - enc;
+    err.integral += err.proportional * deltaT;
+    err.derivative = (err.proportional - err.previous);
+    err.previous = err.proportional;
+    float u = KP * err.proportional + KI * err.integral + KD * err.derivative;
+    if (u >= 0) {
+      err.u = fmax(50, fmin(pwm, u));
+    } else {
+      err.u = fmax(-50, fmin(-1 * pwm, u));
     }
-    else if (error_trans < -180)
-    {
-      error += 360;
-    }
-    eIntegral += error_trans * deltaT;
-    float eDerivative = (error_trans - prevError) / deltaT;
-    prevError = error_trans;
-    float u = KP * error_trans + KI * eIntegral + KD * eDerivative;
-    return fmax(min_val_, fmin(u, max_val_));
+    return fmax(min_val_, fmin(err.u, max_val_));
   }
 
   float control_base(float error, float speed, int condition, float deltaT)
@@ -112,15 +109,15 @@ public:
 
     /*hitung pid*/
     // ubah angular_vel_Filt menjadi angular_vel jika ingin menghitung tanpa filter
-    speed.proportional = target - angular_vel_Filt;
+    err.proportional = target - angular_vel_Filt;
 
-    speed.integral += speed.proportional * deltaT;
+    err.integral += err.proportional * deltaT;
 
-    speed.derivative = (speed.proportional - speed.previous) / deltaT;
-    speed.previous = speed.proportional;
+    err.derivative = (err.proportional - err.previous) / deltaT;
+    err.previous = err.proportional;
 
-    speed.u = KP * speed.proportional + KI * speed.integral + KD * speed.derivative;
-    return fmax(min_val_, fmin(speed.u, max_val_));
+    err.u = KP * err.proportional + KI * err.integral + KD * err.derivative;
+    return fmax(min_val_, fmin(err.u, max_val_));
   }
   float control_default(float target, float curr, float deltaT)
   {
@@ -143,19 +140,19 @@ public:
   }
 
   float get_error() const{
-    return speed.proportional;
+    return err.proportional;
   }
 
   float get_error_int() const{
-    return speed.integral;
+    return err.integral;
   }
 
   float get_error_der() const{
-    return speed.derivative;
+    return err.derivative;
   }
 
   float get_pid_out() const{
-    return speed.u;
+    return err.u;
   }
 
   float get_filt_vel() const

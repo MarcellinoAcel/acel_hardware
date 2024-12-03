@@ -35,9 +35,13 @@
 //  #define USE_MPU9250_IMU
 #define USE_BNO055_IMU
 
-#define K_P 90 // 55
+#define K_P 90            // 55
 #define K_I 366.101694915 // 0.045454545
-#define K_D 0// 0
+#define K_D 0             // 0
+
+#define drib_kp 0.8     // 1  //0.9 //1.2
+#define drib_ki 0.00006 // 0 //0.0001 // 0.00006
+#define drib_kd 1.5     // 0  //0 //0.000015
 
 /*
 ROBOT ORIENTATION
@@ -59,7 +63,7 @@ LEFT  = Y
 
 // define your robot' specs here
 #define MOTOR_MAX_RPS 8.4               // motor's max RPM
-#define MAX_RPS_RATIO 1.3              // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
+#define MAX_RPS_RATIO 1.3               // max RPM allowed for each MAX_RPM_ALLOWED = MOTOR_MAX_RPM * MAX_RPM_RATIO
 #define MOTOR_OPERATING_VOLTAGE 24      // motor's operating voltage (used to calculate max RPM)
 #define MOTOR_POWER_MAX_VOLTAGE 24      // max voltage of the motor's power source (used to calculate max RPM)
 #define MOTOR_POWER_MEASURED_VOLTAGE 24 // current voltage reading of the power connected to the motor (used for calibration)
@@ -103,6 +107,12 @@ LEFT  = Y
 
 #define EXTERNAL_Y_ENCODER_A 32
 #define EXTERNAL_Y_ENCODER_B 31
+
+// dribble motor
+#define dribble_enc_a 11
+#define dribble_enc_b 12
+#define dribble_cw 34
+#define dribble_ccw 35
 
 // MOTOR PINS
 #ifdef USE_GENERIC_2_IN_MOTOR_DRIVER

@@ -117,6 +117,9 @@ PID wheel1(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P - 2, K_I - 2, K_D);
 PID wheel3(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
 PID wheel4(PWM_MIN, PWM_MAX, K_P + 4, K_I + 5, K_D);
+
+PID dribble(PWM_MIN, PWM_MAX, drib_kp, drib_ki, drib_kd);
+
 Kinematics kinematics(
     Kinematics::LINO_BASE,
     MOTOR_MAX_RPS,
@@ -222,8 +225,16 @@ void setup()
     {
         pinMode(cw[i], OUTPUT);
         pinMode(ccw[i], OUTPUT);
+
+        pinMode(dribble_cw, OUTPUT);
+        pinMode(dribble_ccw, OUTPUT);
+
         analogWriteFrequency(cw[i], PWM_FREQUENCY);
         analogWriteFrequency(ccw[i], PWM_FREQUENCY);
+
+        analogWriteFrequency(dribble_cw, PWM_FREQUENCY);
+        analogWriteFrequency(dribble_ccw, PWM_FREQUENCY);
+
         analogWriteResolution(PWM_BITS);
         analogWrite(cw[i], 0);
         analogWrite(ccw[i], 0);
@@ -234,6 +245,11 @@ void setup()
         pinMode(enca[j], INPUT);
         pinMode(encb[j], INPUT);
     }
+    pinMode(dribble_enc_a, INPUT);
+    pinMode(dribble_enc_b, INPUT);
+
+    attachInterrupt(digitalPinToInterrupt(dribble_enc_a), readEncoder<6>, RISING);
+
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[2]), readEncoder<2>, RISING);
@@ -290,6 +306,27 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
     {
         analogWrite(cwPin, 0);
         analogWrite(ccwPin, 0);
+    }
+}
+unsigned long dribble_prevT = 0;
+static bool dribble_cmd = false;
+static bool robot_has_dribble = false;
+void dribble_call(float target_angle, float pwm)
+{
+    if (dribble_cmd == true && robot_has_dribble != true)
+    {
+        while (true)
+        {
+
+            unsigned long dribble_currT = micros();
+            float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+            float dribble_controlled = dribble.control_angle(target_angle, pos[6], pwm, deltaT);
+            if (fabs(dribble.get_error()) < 1)
+            {
+                break;
+            }
+            setMotor(dribble_cw, dribble_ccw, dribble_controlled);
+        }
     }
 }
 
@@ -378,6 +415,8 @@ void moveBase()
     sending_msg.data.data[2] = wheel1.get_error_der(); // 3
     sending_msg.data.data[3] = wheel1.get_pid_out();   // 4
 
+    RCSOFTCHECK(rcl_publish(&sending_, &sending_msg, NULL));
+    
     prevT = currT;
 
     uint8_t system, gyro, accel, mag = 0;
