@@ -122,7 +122,7 @@ LEFT  = Y
 
 // #define MOTOR2_PWM -1 // DON'T TOUCH THIS! This is just a placeholder
 #define MOTOR4_IN_A 22
-#define MOTOR4_IN_B 23
+#define MOTOR4_IN_B 10
 
 // #define MOTOR3_PWM -1 // DON'T TOUCH THIS! This is just a placeholder
 #define MOTOR2_IN_A 5
