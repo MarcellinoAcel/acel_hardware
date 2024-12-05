@@ -26,7 +26,7 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-#include <Servo.h>
+#include "Servo.h"
 
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
@@ -47,6 +47,7 @@ void publishData();
 void upperRobot();
 void twistCallback(const void *msgin);
 void buttonCallback(const void *msgin);
+void dribble_call(float target_angle, float pwm);
 
 #define RCCHECK(fn)                  \
     {                                \
@@ -280,35 +281,35 @@ void setup()
 
 void loop()
 {
-    switch (state)
-    {
-    case WAITING_AGENT:
-        EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
-        break;
-    case AGENT_AVAILABLE:
-        state = (true == createEntities()) ? AGENT_CONNECTED : WAITING_AGENT;
-        if (state == WAITING_AGENT)
-        {
-            destroyEntities();
-        }
-        break;
-    case AGENT_CONNECTED:
-        EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
-        if (state == AGENT_CONNECTED)
-        {
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
-            publishData();
-            moveBase();
-            upperRobot();
-        }
-        break;
-    case AGENT_DISCONNECTED:
-        destroyEntities();
-        state = WAITING_AGENT;
-        break;
-    default:
-        break;
-    }
+    upperRobot();
+    // switch (state)
+    // {
+    // case WAITING_AGENT:
+    //     EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
+    //     break;
+    // case AGENT_AVAILABLE:
+    //     state = (true == createEntities()) ? AGENT_CONNECTED : WAITING_AGENT;
+    //     if (state == WAITING_AGENT)
+    //     {
+    //         destroyEntities();
+    //     }
+    //     break;
+    // case AGENT_CONNECTED:
+    //     EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
+    //     if (state == AGENT_CONNECTED)
+    //     {
+    //         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
+    //         publishData();
+    //         moveBase();
+    //     }
+    //     break;
+    // case AGENT_DISCONNECTED:
+    //     destroyEntities();
+    //     state = WAITING_AGENT;
+    //     break;
+    // default:
+    //     break;
+    // }
 }
 
 void setMotor(int cwPin, int ccwPin, float pwmVal)
@@ -330,36 +331,28 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
     }
 }
 
-void upperRobot()
-{
-    ball_holder.write(120);
-    setMotor(cw[4],~ ccw[4], 150);
-}
 
 unsigned long dribble_prevT = 0;
-static bool dribble_cmd = false;
-static bool robot_has_dribble = false;
+// static bool dribble_cmd = false;
+// static bool robot_has_dribble = false;
 void dribble_call(float target_angle, float pwm)
 {
-    if (dribble_cmd == true && robot_has_dribble != true)
-    {
-        while (true)
-        {
 
-            unsigned long dribble_currT = micros();
-            float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
-            float dribble_controlled = dribble.control_angle(target_angle, pos[6], pwm, deltaT);
-            if (fabs(dribble.get_error()) < 1)
-            {
-                break;
-            }
-            setMotor(dribble_cw, dribble_ccw, dribble_controlled);
-        }
-
-        robot_has_dribble = false;
-    }
+        unsigned long dribble_currT = micros();
+        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+        float dribble_controlled = dribble.control_angle(target_angle, pos[4], pwm, deltaT);
+        setMotor(dribble_cw, dribble_ccw, dribble_controlled);
 }
 
+void upperRobot()
+{
+    dribble_call(140,120);
+    // ball_holder.write(55);
+    // delay(1000);
+    // ball_holder.write(120);
+    // delay(500);
+    // setMotor(cw[4], ccw[4], -150);
+}
 void moveBase()
 {
     unsigned long currT = micros();
@@ -477,7 +470,8 @@ void twistCallback(const void *msgin)
     prev_cmd_time = millis();
 }
 
-void buttonCallback(const void *msgin){
+void buttonCallback(const void *msgin)
+{
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     prev_cmd_time = millis();
 }

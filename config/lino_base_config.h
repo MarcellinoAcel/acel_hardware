@@ -39,9 +39,9 @@
 #define K_I 366.101694915 // 0.045454545
 #define K_D 0             // 0
 
-#define drib_kp 0.8     // 1  //0.9 //1.2
-#define drib_ki 0.00006 // 0 //0.0001 // 0.00006
-#define drib_kd 1.5     // 0  //0 //0.000015
+#define drib_kp 0.2    // 1  //0.9 //1.2
+#define drib_ki 0 // 0 //0.0001 // 0.00006
+#define drib_kd 0     // 0  //0 //0.000015
 
 /*
 ROBOT ORIENTATION
@@ -109,13 +109,13 @@ LEFT  = Y
 #define EXTERNAL_Y_ENCODER_B 31
 
 // dribble motor
-#define dribble_enc_a 34
-#define dribble_enc_b 35
-#define dribble_cw 21
+#define dribble_enc_a 35
+#define dribble_enc_b 34
+#define dribble_cw 37
 #define dribble_ccw 36
 
 // servo
-#define servo 20
+#define servo 9
 
 // MOTOR PINS
 #ifdef USE_BTS7960_MOTOR_DRIVER

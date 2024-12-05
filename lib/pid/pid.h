@@ -62,12 +62,7 @@ public:
     err.integral += err.proportional * deltaT;
     err.derivative = (err.proportional - err.previous);
     err.previous = err.proportional;
-    float u = KP * err.proportional + KI * err.integral + KD * err.derivative;
-    if (u >= 0) {
-      err.u = fmax(50, fmin(pwm, u));
-    } else {
-      err.u = fmax(-50, fmin(-1 * pwm, u));
-    }
+    err.u = KP * err.proportional + KI * err.integral + KD * err.derivative;
     return fmax(min_val_, fmin(err.u, max_val_));
   }
 
