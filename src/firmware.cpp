@@ -12,6 +12,8 @@
 #include <geometry_msgs/msg/vector3.h>
 #include <std_msgs/msg/float32_multi_array.h>
 
+#include <std_msgs/msg/int32_multi_array.h>
+
 #include "odometry.h"
 #include "config.h"
 #include "kinematics.h"
@@ -24,10 +26,9 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
+#include <Servo.h>
 
-Speed enc_x(1024, 0.04695);
-Speed enc_y(1024, 0.04695);
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
 Speed enc1(COUNTS_PER_REV1, WHEEL_DIAMETER);
 Speed enc2(COUNTS_PER_REV2, WHEEL_DIAMETER);
@@ -43,7 +44,9 @@ struct timespec getTime();
 void setMotor(int cwPin, int ccwPin, float pwmVal);
 void moveBase();
 void publishData();
+void upperRobot();
 void twistCallback(const void *msgin);
+void buttonCallback(const void *msgin);
 
 #define RCCHECK(fn)                  \
     {                                \
@@ -82,9 +85,12 @@ rcl_publisher_t checking_output_motor;
 rcl_publisher_t checking_input_motor;
 rcl_publisher_t sending_;
 
+rcl_subscription_t button_subs;
+
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
+std_msgs__msg__Int32MultiArray button_press;
 std_msgs__msg__Float32MultiArray checking_output_msg;
 std_msgs__msg__Float32MultiArray checking_input_msg;
 std_msgs__msg__Float32MultiArray sending_msg;
@@ -108,10 +114,10 @@ enum states
     AGENT_DISCONNECTED
 } state;
 
-const int enca[6] = {MOTOR1_ENCODER_A, MOTOR2_ENCODER_A, MOTOR3_ENCODER_A, MOTOR4_ENCODER_A, EXTERNAL_X_ENCODER_A, EXTERNAL_Y_ENCODER_A};
-const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR4_ENCODER_B, EXTERNAL_X_ENCODER_B, EXTERNAL_Y_ENCODER_B};
+const int enca[5] = {MOTOR1_ENCODER_A, MOTOR2_ENCODER_A, MOTOR3_ENCODER_A, MOTOR4_ENCODER_A, dribble_enc_a};
+const int encb[5] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR4_ENCODER_B, dribble_enc_b};
 
-volatile long pos[6];
+volatile long pos[5];
 
 PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
@@ -156,6 +162,35 @@ bool createEntities()
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
         "omni_cont/cmd_vel"));
+
+    executor = rclc_executor_get_zero_initialized_executor();
+    RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &twist_subscriber,
+        &twist_msg,
+        &twistCallback,
+        ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_timer(&executor, &control_timer));
+
+    RCCHECK(rclc_subscription_init_default(
+        &button_subs,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray),
+        "button"));
+
+    // Initialize executor
+    executor = rclc_executor_get_zero_initialized_executor();
+    RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
+
+    // Add the subscription to the executor
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &button_subs,
+        &button_press,
+        &buttonCallback,
+        ON_NEW_DATA));
+
     // trouble shooting
     RCCHECK(rclc_publisher_init_default(
         &checking_output_motor,
@@ -180,16 +215,6 @@ bool createEntities()
     sending_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
     sending_msg.data.size = 4;
 
-    executor = rclc_executor_get_zero_initialized_executor();
-    RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
-    RCCHECK(rclc_executor_add_subscription(
-        &executor,
-        &twist_subscriber,
-        &twist_msg,
-        &twistCallback,
-        ON_NEW_DATA));
-    RCCHECK(rclc_executor_add_timer(&executor, &control_timer));
-
     syncTime();
     digitalWrite(LED_PIN, HIGH);
 
@@ -209,6 +234,7 @@ void readEncoder()
         pos[j]--;
     }
 }
+Servo ball_holder;
 
 void setup()
 {
@@ -221,7 +247,9 @@ void setup()
     {
         flashLED(3);
     }
-    for (int i = 0; i < 4; i++)
+
+    ball_holder.attach(servo);
+    for (int i = 0; i < 5; i++)
     {
         pinMode(cw[i], OUTPUT);
         pinMode(ccw[i], OUTPUT);
@@ -238,24 +266,16 @@ void setup()
         analogWriteResolution(PWM_BITS);
         analogWrite(cw[i], 0);
         analogWrite(ccw[i], 0);
-    }
-    for (int j = 0; j < 6; j++)
-    {
 
-        pinMode(enca[j], INPUT);
-        pinMode(encb[j], INPUT);
+        pinMode(enca[i], INPUT);
+        pinMode(encb[i], INPUT);
     }
-    pinMode(dribble_enc_a, INPUT);
-    pinMode(dribble_enc_b, INPUT);
-
-    attachInterrupt(digitalPinToInterrupt(dribble_enc_a), readEncoder<6>, RISING);
 
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[2]), readEncoder<2>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[3]), readEncoder<3>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[4]), readEncoder<4>, RISING);
-    attachInterrupt(digitalPinToInterrupt(enca[5]), readEncoder<5>, RISING);
 }
 
 void loop()
@@ -279,6 +299,7 @@ void loop()
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
             publishData();
             moveBase();
+            upperRobot();
         }
         break;
     case AGENT_DISCONNECTED:
@@ -308,6 +329,13 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
         analogWrite(ccwPin, 0);
     }
 }
+
+void upperRobot()
+{
+    ball_holder.write(120);
+    setMotor(cw[4],~ ccw[4], 150);
+}
+
 unsigned long dribble_prevT = 0;
 static bool dribble_cmd = false;
 static bool robot_has_dribble = false;
@@ -327,6 +355,8 @@ void dribble_call(float target_angle, float pwm)
             }
             setMotor(dribble_cw, dribble_ccw, dribble_controlled);
         }
+
+        robot_has_dribble = false;
     }
 }
 
@@ -443,6 +473,11 @@ void publishData()
 
 void twistCallback(const void *msgin)
 {
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    prev_cmd_time = millis();
+}
+
+void buttonCallback(const void *msgin){
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     prev_cmd_time = millis();
 }

@@ -109,10 +109,13 @@ LEFT  = Y
 #define EXTERNAL_Y_ENCODER_B 31
 
 // dribble motor
-#define dribble_enc_a 11
-#define dribble_enc_b 12
-#define dribble_cw 34
-#define dribble_ccw 35
+#define dribble_enc_a 34
+#define dribble_enc_b 35
+#define dribble_cw 21
+#define dribble_ccw 36
+
+// servo
+#define servo 20
 
 // MOTOR PINS
 #ifdef USE_BTS7960_MOTOR_DRIVER
@@ -132,8 +135,8 @@ LEFT  = Y
 #define MOTOR2_IN_A 3
 #define MOTOR2_IN_B 4
 
-const int cw[4] = {MOTOR1_IN_A, MOTOR2_IN_A, MOTOR3_IN_A, MOTOR4_IN_A};
-const int ccw[4] = {MOTOR1_IN_B, MOTOR2_IN_B, MOTOR3_IN_B, MOTOR4_IN_B};
+const int cw[5] = {MOTOR1_IN_A, MOTOR2_IN_A, MOTOR3_IN_A, MOTOR4_IN_A, dribble_cw};
+const int ccw[5] = {MOTOR1_IN_B, MOTOR2_IN_B, MOTOR3_IN_B, MOTOR4_IN_B, dribble_ccw};
 
 /*
 1 = 18, 19
