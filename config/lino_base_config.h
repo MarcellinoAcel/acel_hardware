@@ -39,9 +39,9 @@
 #define K_I 366.101694915 // 0.045454545
 #define K_D 0             // 0
 
-#define drib_kp 0.2    // 1  //0.9 //1.2
-#define drib_ki 0 // 0 //0.0001 // 0.00006
-#define drib_kd 0     // 0  //0 //0.000015
+#define drib_kp 0.2 // 1  //0.9 //1.2
+#define drib_ki 0   // 0 //0.0001 // 0.00006
+#define drib_kd 0   // 0  //0 //0.000015
 
 /*
 ROBOT ORIENTATION
@@ -109,19 +109,19 @@ LEFT  = Y
 #define EXTERNAL_Y_ENCODER_B 31
 
 // dribble motor
-#define dribble_enc_a 35
-#define dribble_enc_b 34
-#define dribble_cw 37
-#define dribble_ccw 36
+#define dribble_enc_a 34
+#define dribble_enc_b 35
+#define dribble_cw 36
+#define dribble_ccw 37
 
 // servo
 #define servo 9
 
 // MOTOR PINS
-#ifdef USE_BTS7960_MOTOR_DRIVER
+
 // #define MOTOR1_PWM -1  // DON'T TOUCH THIS! This is just a placeholder
-#define MOTOR3_IN_A 18 //2
-#define MOTOR3_IN_B 19 //2
+#define MOTOR3_IN_A 18 // 2
+#define MOTOR3_IN_B 19 // 2
 
 // #define MOTOR2_PWM -1 // DON'T TOUCH THIS! This is just a placeholder
 #define MOTOR4_IN_A 22 // 4
@@ -158,6 +158,5 @@ real by elect
 // const int pwm[4] ={-1,-1,-1,-1};
 #define PWM_MAX pow(2, PWM_BITS) - 1
 #define PWM_MIN -PWM_MAX
-#endif
 
 #endif

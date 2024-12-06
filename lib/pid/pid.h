@@ -23,15 +23,16 @@ private:
   float lowpass_prev = 0;
   float radian = 0;
   float eProportional;
-  struct e{
+  struct e
+  {
     float proportional;
     float integral;
     float derivative;
     float u;
     float previous;
-  }err;
-public:
+  } err;
 
+public:
   PID(float MIN_VAL, float MAX_VAL, float kp_, float ki_, float kd_) : min_val_(MIN_VAL),
                                                                        max_val_(MAX_VAL),
                                                                        KP(kp_),
@@ -44,26 +45,28 @@ public:
     // error_integral = 0.0;
     // error_previous = 0.0;
   }
-  void paramater(float kp_, float ki_, float kd_){
+  void paramater(float kp_, float ki_, float kd_)
+  {
     kp = kp_;
     ki = ki_;
     kd = kd_;
   }
-  void paramaterT(float kp_, float ki_, float kd_){
+  void paramaterT(float kp_, float ki_, float kd_)
+  {
     kpT = kp_;
     kiT = ki_;
     kdT = kd_;
   }
 
-  
-  float control_angle(float target, float enc, float pwm, float deltaT) {
+  float control_angle(float target, float enc, float pwm, float deltaT)
+  {
     float deg2target = (target / 360) * 3840;
     err.proportional = deg2target - enc;
     err.integral += err.proportional * deltaT;
     err.derivative = (err.proportional - err.previous);
     err.previous = err.proportional;
     err.u = KP * err.proportional + KI * err.integral + KD * err.derivative;
-    return fmax(min_val_, fmin(err.u, max_val_));
+    return fmax(-1 * pwm, fmin(err.u, pwm));
   }
 
   float control_base(float error, float speed, int condition, float deltaT)
@@ -134,19 +137,23 @@ public:
     return lowpass_filt;
   }
 
-  float get_error() const{
+  float get_error() const
+  {
     return err.proportional;
   }
 
-  float get_error_int() const{
+  float get_error_int() const
+  {
     return err.integral;
   }
 
-  float get_error_der() const{
+  float get_error_der() const
+  {
     return err.derivative;
   }
 
-  float get_pid_out() const{
+  float get_pid_out() const
+  {
     return err.u;
   }
 

@@ -20,6 +20,7 @@
 #include "pid.h"
 #include "speed.h"
 #include "imu.h"
+#include "button_list.h"
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
@@ -49,14 +50,6 @@ void twistCallback(const void *msgin);
 void buttonCallback(const void *msgin);
 void dribble_call(float target_angle, float pwm);
 
-#define RCCHECK(fn)                  \
-    {                                \
-        rcl_ret_t temp_rc = fn;      \
-        if ((temp_rc != RCL_RET_OK)) \
-        {                            \
-            rclErrorLoop();          \
-        }                            \
-    }
 #define RCSOFTCHECK(fn)              \
     {                                \
         rcl_ret_t temp_rc = fn;      \
@@ -138,6 +131,8 @@ Kinematics kinematics(
 
 Odometry odometry;
 IMU imu_sensor;
+
+Button_list button;
 bool createEntities()
 {
     allocator = rcl_get_default_allocator();
@@ -219,6 +214,8 @@ bool createEntities()
     syncTime();
     digitalWrite(LED_PIN, HIGH);
 
+    button.init(&node);
+
     return true;
 }
 
@@ -281,35 +278,35 @@ void setup()
 
 void loop()
 {
-    upperRobot();
-    // switch (state)
-    // {
-    // case WAITING_AGENT:
-    //     EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
-    //     break;
-    // case AGENT_AVAILABLE:
-    //     state = (true == createEntities()) ? AGENT_CONNECTED : WAITING_AGENT;
-    //     if (state == WAITING_AGENT)
-    //     {
-    //         destroyEntities();
-    //     }
-    //     break;
-    // case AGENT_CONNECTED:
-    //     EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
-    //     if (state == AGENT_CONNECTED)
-    //     {
-    //         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
-    //         publishData();
-    //         moveBase();
-    //     }
-    //     break;
-    // case AGENT_DISCONNECTED:
-    //     destroyEntities();
-    //     state = WAITING_AGENT;
-    //     break;
-    // default:
-    //     break;
-    // }
+    switch (state)
+    {
+    case WAITING_AGENT:
+        EXECUTE_EVERY_N_MS(500, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
+        break;
+    case AGENT_AVAILABLE:
+        state = (true == createEntities()) ? AGENT_CONNECTED : WAITING_AGENT;
+        if (state == WAITING_AGENT)
+        {
+            destroyEntities();
+        }
+        break;
+    case AGENT_CONNECTED:
+        EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
+        if (state == AGENT_CONNECTED)
+        {
+            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
+            publishData();
+            moveBase();
+            upperRobot();
+        }
+        break;
+    case AGENT_DISCONNECTED:
+        destroyEntities();
+        state = WAITING_AGENT;
+        break;
+    default:
+        break;
+    }
 }
 
 void setMotor(int cwPin, int ccwPin, float pwmVal)
@@ -331,27 +328,51 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
     }
 }
 
-
 unsigned long dribble_prevT = 0;
-// static bool dribble_cmd = false;
-// static bool robot_has_dribble = false;
+
 void dribble_call(float target_angle, float pwm)
 {
-
+    while (true)
+    {
         unsigned long dribble_currT = micros();
         float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
         float dribble_controlled = dribble.control_angle(target_angle, pos[4], pwm, deltaT);
+        if (dribble.get_error() < 10)
+        {
+            break;
+        }
         setMotor(dribble_cw, dribble_ccw, dribble_controlled);
+        dribble_prevT = dribble_currT;
+        publishData();
+        moveBase();
+    }
 }
 
+int cmd_to_dribble = 0;
+bool rt_prev_state = false;
 void upperRobot()
 {
-    dribble_call(140,120);
-    // ball_holder.write(55);
-    // delay(1000);
-    // ball_holder.write(120);
-    // delay(500);
-    // setMotor(cw[4], ccw[4], -150);
+    if (button.button.RT == 1 && !rt_prev_state)
+    {
+        cmd_to_dribble = 1;
+    }
+    rt_prev_state = (button.button.RT == 1);
+    if (cmd_to_dribble == 1)
+    {
+
+        dribble_call(0, 150);
+        ball_holder.write(55);
+        delay(500);
+        ball_holder.write(120);
+        delay(100);
+        dribble_call(100, 200);
+        cmd_to_dribble = 0;
+    }
+    else
+    {
+        ball_holder.write(55);
+        dribble_call(30, 150);
+    }
 }
 void moveBase()
 {
