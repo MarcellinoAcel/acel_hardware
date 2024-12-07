@@ -11,10 +11,10 @@ button A = 0
 button B = 1
 button X = 3
 button Y = 4
-button RT = 10
-button LT = 9
-button LB = 7
-button RB = 8
+button RT = 9
+button LT = 8
+button LB = 6
+button RB = 7
 */
 
 #define RCCHECK(fn)                  \
@@ -53,16 +53,16 @@ private:
                 instance->button.Y = msg->data.data[4];
                 break;
             case 10:
-                instance->button.RT = msg->data.data[10];
+                instance->button.RT = msg->data.data[9];
                 break;
             case 9:
-                instance->button.LT = msg->data.data[9];
+                instance->button.LT = msg->data.data[8];
                 break;
             case 7:
-                instance->button.LB = msg->data.data[7];
+                instance->button.LB = msg->data.data[6];
                 break;
             case 8:
-                instance->button.RB = msg->data.data[8];
+                instance->button.RB = msg->data.data[7];
                 break;
             default:
                 break;

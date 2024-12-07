@@ -297,7 +297,7 @@ void loop()
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
             publishData();
             moveBase();
-            upperRobot();
+            // upperRobot();
         }
         break;
     case AGENT_DISCONNECTED:
@@ -329,13 +329,27 @@ void setMotor(int cwPin, int ccwPin, float pwmVal)
 }
 
 unsigned long dribble_prevT = 0;
+unsigned long dribble_prevT = 0;
+enum DribbleState
+{
+    DRIBBLE_START,
+    DRIBBLE_CONTROL,
+    DRIBBLE_FINISHED
+};
 
+DribbleState dribble_state = DRIBBLE_START;
 void dribble_call(float target_angle, float pwm)
 {
-    while (true)
+    unsigned long dribble_currT = micros();
+    float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+    switch (dribble_state)
     {
-        unsigned long dribble_currT = micros();
-        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+    case DRIBBLE_START:
+        dribble_prevT = dribble_currT;
+        dribble_state = DRIBBLE_CONTROL;
+        break;
+
+    case DRIBBLE_CONTROL:
         float dribble_controlled = dribble.control_angle(target_angle, pos[4], pwm, deltaT);
         if (dribble.get_error() < 10)
         {
@@ -345,6 +359,12 @@ void dribble_call(float target_angle, float pwm)
         dribble_prevT = dribble_currT;
         publishData();
         moveBase();
+
+        break;
+
+    case DRIBBLE_FINISHED:
+        setMotor(0, 0, 0);
+        break;
     }
 }
 
@@ -352,12 +372,11 @@ int cmd_to_dribble = 0;
 bool rt_prev_state = false;
 void upperRobot()
 {
-    if (button.button.RT == 1 && !rt_prev_state)
-    {
-        cmd_to_dribble = 1;
-    }
-    rt_prev_state = (button.button.RT == 1);
-    if (cmd_to_dribble == 1)
+    // if (button.button.RT == 1)
+    // {
+    //     cmd_to_dribble = 1;
+    // }
+    if (button.button.RT == 1)
     {
 
         dribble_call(0, 150);
