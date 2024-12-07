@@ -263,7 +263,7 @@ int cmd_to_dribble = 0;
 bool rt_prev_state = false;
 void upperRobot()
 {
-    if (button.RT == 1)
+    if (button_msg.data == 1)
     {
         cmd_to_dribble = 1;
     }
