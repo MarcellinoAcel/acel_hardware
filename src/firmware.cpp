@@ -13,7 +13,7 @@
 #include <std_msgs/msg/float32_multi_array.h>
 
 #include <std_msgs/msg/string.h>
-#include <std_msgs/msg/int32_multi_array.h>
+#include <std_msgs/msg/int32.h>
 
 #include "odometry.h"
 #include "config.h"
@@ -87,18 +87,16 @@ rcl_subscription_t button_sub;
 rcl_publisher_t checking_output_motor;
 rcl_publisher_t checking_input_motor;
 rcl_publisher_t sending_;
-rcl_publisher_t debug_pub;
 
 rcl_subscription_t button_subs;
 
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
-std_msgs__msg__Int32MultiArray button_msg;
 std_msgs__msg__Float32MultiArray checking_output_msg;
 std_msgs__msg__Float32MultiArray checking_input_msg;
 std_msgs__msg__Float32MultiArray sending_msg;
-std_msgs__msg__String debug_msg;
+std_msgs__msg__Int32 button_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -143,45 +141,10 @@ Kinematics kinematics(
 Odometry odometry;
 IMU imu_sensor;
 
-void buttonCallback(const void *msg_in)
+void buttonCallback(const void *msgin)
 {
-    // const std_msgs__msg__Int32MultiArray *msg = (const std_msgs__msg__Int32MultiArray *)msg_in;
-    // button_msg = *msg;
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-    prev_cmd_time = millis();
-    const std_msgs__msg__Int32MultiArray *msg = (const std_msgs__msg__Int32MultiArray *)msg_in;
-    for (size_t i = 0; i < msg->data.size; i++)
-    {
-        switch (i)
-        {
-        case 0:
-            button.A = msg->data.data[0];
-            break;
-        case 1:
-            button.B = msg->data.data[1];
-            break;
-        case 3:
-            button.X = msg->data.data[3];
-            break;
-        case 4:
-            button.Y = msg->data.data[4];
-            break;
-        case 10:
-            button.RT = msg->data.data[9];
-            break;
-        case 9:
-            button.LT = msg->data.data[8];
-            break;
-        case 7:
-            button.LB = msg->data.data[6];
-            break;
-        case 8:
-            button.RB = msg->data.data[7];
-            break;
-        default:
-            break;
-        }
-    }
+    const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msgin;
+    button.RT = msg->data;
 }
 
 void twistCallback(const void *msgin)
@@ -225,19 +188,21 @@ bool createEntities()
         &twist_msg,
         &twistCallback,
         ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_timer(&executor, &control_timer));
+
+    // button
 
     RCCHECK(rclc_subscription_init_default(
         &button_sub,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32MultiArray),
-        "button"));
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+        "button_micros"));
     RCCHECK(rclc_executor_add_subscription(
         &executor,
         &button_sub,
         &button_msg,
         &buttonCallback,
         ON_NEW_DATA));
-    RCCHECK(rclc_executor_add_timer(&executor, &control_timer));
 
     // trouble shooting
     RCCHECK(rclc_publisher_init_default(
@@ -262,12 +227,6 @@ bool createEntities()
         "data_for_regres"));
     sending_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
     sending_msg.data.size = 4;
-
-    RCCHECK(rclc_publisher_init_default(
-        &debug_pub,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String),
-        "debug_checking"));
 
     syncTime();
     digitalWrite(LED_PIN, HIGH);
@@ -428,11 +387,11 @@ int cmd_to_dribble = 0;
 bool rt_prev_state = false;
 void upperRobot()
 {
-    if (twist_msg.linear.x > 0)
+    if(button.RT == 1){
+        cmd_to_dribble =1;
+    }
+    if (cmd_to_dribble == 1)
     {
-        debug_msg.data.data = (uint8_t *)"moveit";
-        debug_msg.data.size = strlen((char *)debug_msg.data.data);
-        RCSOFTCHECK(rcl_publish(&debug_pub, &debug_msg, NULL));
         dribble_call(0, 150);
         ball_holder.write(55);
         delay(500);
@@ -443,10 +402,6 @@ void upperRobot()
     }
     else
     {
-
-        debug_msg.data.data = (uint8_t *)"stuckit";
-        debug_msg.data.size = strlen((char *)debug_msg.data.data);
-        RCSOFTCHECK(rcl_publish(&debug_pub, &debug_msg, NULL));
         ball_holder.write(55);
         dribble_call(30, 150);
     }
