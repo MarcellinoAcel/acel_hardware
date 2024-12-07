@@ -159,4 +159,16 @@ real by elect
 #define PWM_MAX pow(2, PWM_BITS) - 1
 #define PWM_MIN -PWM_MAX
 
+struct but
+{
+     int A;
+     int B;
+     int X;
+     int Y;
+     int RT;
+     int LT;
+     int LB;
+     int RB;
+} button;
+
 #endif
