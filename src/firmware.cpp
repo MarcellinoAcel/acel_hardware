@@ -177,7 +177,8 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(enca[4]), readEncoder<4>, RISING);
     pinMode(LED_PIN, OUTPUT);
 
-    delay(2000);
+    ball_holder.write(60);
+    delay(200);
 }
 float toCount(float count)
 {
@@ -209,6 +210,13 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
+
+            checking_input_msg.data.data[0] = dribble.get_deg2Targt();    // 1
+            checking_input_msg.data.data[1] = toDeg(pos[4]);              // 2
+            checking_input_msg.data.data[2] = 0;                          // 3
+            checking_input_msg.data.data[3] = toDeg(dribble.get_error()); // 4
+
+            RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
         break;
     case AGENT_DISCONNECTED:
@@ -231,18 +239,17 @@ void dribble_call_once(float target, float pwm)
         publishData();
         moveBase();
 
-        unsigned long dribble_currT = micros();
-        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
-        setMotor(dribble_cw, dribble_ccw, dribble.control_angle(100, pos[4], 150, deltaT));
-
-        checking_input_msg.data.data[0] = dribble.get_deg2Targt(); // 1
-        checking_input_msg.data.data[1] = toDeg(pos[4]);       // 2
-        checking_input_msg.data.data[2] = cmd_to_dribble;          // 3
-        checking_input_msg.data.data[3] = toDeg(dribble.get_error());     // 4
+        checking_input_msg.data.data[0] = dribble.get_deg2Targt();    // 1
+        checking_input_msg.data.data[1] = toDeg(pos[4]);              // 2
+        checking_input_msg.data.data[2] = 0;                          // 3
+        checking_input_msg.data.data[3] = toDeg(dribble.get_error()); // 4
 
         RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+        unsigned long dribble_currT = micros();
+        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+        setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
         dribble_prevT = dribble_currT;
-        if (fabs(toDeg(dribble.get_error())) < 10)
+        if (fabs(toDeg(dribble.get_error())) <5)
         {
             break;
         }
@@ -252,29 +259,39 @@ void dribble_call(float target, float pwm)
 {
     unsigned long dribble_currT = micros();
     float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
-    setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], 150, deltaT));
+    setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
     dribble_prevT = dribble_currT;
 }
+bool buttonPressed = false;
 void upperRobot()
 {
-    if (button_msg.data == 1)
+    if (button_msg.data == 1 && buttonPressed == false)
     {
         cmd_to_dribble = 1;
+        buttonPressed = true;
+    }
+    else if (button_msg.data == 0)
+    {
+        buttonPressed = false;
     }
     if (cmd_to_dribble == 1)
     {
 
-        digitalWrite(LED_PIN, LOW);
-        // dribble_call_once(0, 150);
-        dribble_call_once(200, 200);
+        ball_holder.write(60);
+        delay(100);
+        dribble_call_once(0, 150);
+        // delay(1000);
+        dribble_call_once(90, 150);
         ball_holder.write(120);
         delay(100);
+        ball_holder.write(60);
+        delay(100);
+        dribble_call_once(45, 150);
         cmd_to_dribble = 0;
     }
     else
     {
-        ball_holder.write(55);
-        dribble_call(30, 150);
+        dribble_call(10, 100);
     }
 }
 
@@ -386,7 +403,7 @@ bool createEntities()
         &twist_subscriber,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-        "cmd_vel_joy"));
+        "omni_cont/cmd_vel"));
 
     RCCHECK(rclc_subscription_init_default(
         &button_sub,
@@ -440,11 +457,11 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    rcl_publisher_fini(&odom_publisher, &node);
-    rcl_publisher_fini(&imu_publisher, &node);
-    rcl_subscription_fini(&twist_subscriber, &node);
-    rcl_node_fini(&node);
-    rcl_timer_fini(&control_timer);
+    // rcl_publisher_fini(&odom_publisher, &node);
+    // rcl_publisher_fini(&imu_publisher, &node);
+    // rcl_subscription_fini(&twist_subscriber, &node);
+    // rcl_node_fini(&node);
+    // rcl_timer_fini(&control_timer);
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
 

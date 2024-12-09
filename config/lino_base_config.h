@@ -39,9 +39,9 @@
 #define K_I 366.101694915 // 0.045454545
 #define K_D 0             // 0
 
-#define drib_kp 0.2 // 1  //0.9 //1.2
+#define drib_kp 0.5 // 1  //0.9 //1.2
 #define drib_ki 0   // 0 //0.0001 // 0.00006
-#define drib_kd 0   // 0  //0 //0.000015
+#define drib_kd 0.2   // 0  //0 //0.000015
 
 /*
 ROBOT ORIENTATION
