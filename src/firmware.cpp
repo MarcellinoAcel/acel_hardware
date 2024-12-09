@@ -179,7 +179,14 @@ void setup()
 
     delay(2000);
 }
-
+float toCount(float count)
+{
+    return 3830 * (count / 360);
+}
+float toDeg(float count)
+{
+    return 360 * (count / 3840);
+}
 void loop()
 {
     switch (state)
@@ -202,12 +209,6 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
-            checking_input_msg.data.data[0] = twist_msg.linear.x;  // 1
-            checking_input_msg.data.data[1] = twist_msg.linear.y;  // 2
-            checking_input_msg.data.data[2] = twist_msg.angular.z; // 3
-            checking_input_msg.data.data[3] = button_msg.data;     // 4
-
-            RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
         break;
     case AGENT_DISCONNECTED:
@@ -220,47 +221,40 @@ void loop()
 }
 
 unsigned long dribble_prevT = 0;
-enum DribbleState
+int cmd_to_dribble = 0;
+void dribble_call_once(float target, float pwm)
 {
-    DRIBBLE_START,
-    DRIBBLE_CONTROL,
-    DRIBBLE_FINISHED
-};
-
-DribbleState dribble_state = DRIBBLE_START;
-float dribble_controlled = 0.0;
-void dribble_call(float target_angle, float pwm)
-{
-    unsigned long dribble_currT = micros();
-    float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
-    switch (dribble_state)
+    while (true)
     {
-    case DRIBBLE_START:
-        dribble_prevT = dribble_currT;
-        dribble_state = DRIBBLE_CONTROL;
-        break;
 
-    case DRIBBLE_CONTROL:
-        dribble_controlled = dribble.control_angle(target_angle, pos[4], pwm, deltaT);
-        if (dribble.get_error() < 10)
-        {
-            break;
-        }
-        setMotor(dribble_cw, dribble_ccw, dribble_controlled);
-        dribble_prevT = dribble_currT;
+        RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
         publishData();
         moveBase();
 
-        break;
+        unsigned long dribble_currT = micros();
+        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+        setMotor(dribble_cw, dribble_ccw, dribble.control_angle(100, pos[4], 150, deltaT));
 
-    case DRIBBLE_FINISHED:
-        setMotor(0, 0, 0);
-        break;
+        checking_input_msg.data.data[0] = dribble.get_deg2Targt(); // 1
+        checking_input_msg.data.data[1] = toDeg(pos[4]);       // 2
+        checking_input_msg.data.data[2] = cmd_to_dribble;          // 3
+        checking_input_msg.data.data[3] = toDeg(dribble.get_error());     // 4
+
+        RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+        dribble_prevT = dribble_currT;
+        if (fabs(toDeg(dribble.get_error())) < 10)
+        {
+            break;
+        }
     }
 }
-
-int cmd_to_dribble = 0;
-bool rt_prev_state = false;
+void dribble_call(float target, float pwm)
+{
+    unsigned long dribble_currT = micros();
+    float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+    setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], 150, deltaT));
+    dribble_prevT = dribble_currT;
+}
 void upperRobot()
 {
     if (button_msg.data == 1)
@@ -269,12 +263,12 @@ void upperRobot()
     }
     if (cmd_to_dribble == 1)
     {
-        dribble_call(0, 150);
-        ball_holder.write(55);
-        delay(500);
+
+        digitalWrite(LED_PIN, LOW);
+        // dribble_call_once(0, 150);
+        dribble_call_once(200, 200);
         ball_holder.write(120);
         delay(100);
-        dribble_call(100, 200);
         cmd_to_dribble = 0;
     }
     else

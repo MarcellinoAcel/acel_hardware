@@ -23,6 +23,7 @@ private:
   float lowpass_prev = 0;
   float radian = 0;
   float eProportional;
+  float deg2target = 0;
   struct e
   {
     float proportional;
@@ -60,7 +61,7 @@ public:
 
   float control_angle(float target, float enc, float pwm, float deltaT)
   {
-    float deg2target = (target / 360) * 3840;
+    deg2target = target / 360 * 3840;
     err.proportional = deg2target - enc;
     err.integral += err.proportional * deltaT;
     err.derivative = (err.proportional - err.previous);
@@ -136,7 +137,10 @@ public:
 
     return lowpass_filt;
   }
-
+  float get_deg2Targt() const
+  {
+    return deg2target;
+  }
   float get_error() const
   {
     return err.proportional;
