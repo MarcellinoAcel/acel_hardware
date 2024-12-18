@@ -41,7 +41,7 @@
 
 #define drib_kp 0.5 // 1  //0.9 //1.2
 #define drib_ki 0   // 0 //0.0001 // 0.00006
-#define drib_kd 0.2   // 0  //0 //0.000015
+#define drib_kd 0.2 // 0  //0 //0.000015
 
 /*
 ROBOT ORIENTATION
@@ -114,6 +114,12 @@ LEFT  = Y
 #define dribble_cw 36
 #define dribble_ccw 37
 
+// catcher motor
+#define catcher_cw 33
+#define catcher_ccw 40
+#define prox_start 11
+#define prox_end 12
+
 // servo
 #define servo 9
 
@@ -135,8 +141,8 @@ LEFT  = Y
 #define MOTOR2_IN_A 3
 #define MOTOR2_IN_B 4
 
-const int cw[5] = {MOTOR1_IN_A, MOTOR2_IN_A, MOTOR3_IN_A, MOTOR4_IN_A, dribble_cw};
-const int ccw[5] = {MOTOR1_IN_B, MOTOR2_IN_B, MOTOR3_IN_B, MOTOR4_IN_B, dribble_ccw};
+const int cw[6] = {MOTOR1_IN_A, MOTOR2_IN_A, MOTOR3_IN_A, MOTOR4_IN_A, dribble_cw};
+const int ccw[6] = {MOTOR1_IN_B, MOTOR2_IN_B, MOTOR3_IN_B, MOTOR4_IN_B, dribble_ccw};
 
 /*
 1 = 18, 19

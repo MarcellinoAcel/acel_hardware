@@ -40,11 +40,6 @@ public:
                                                                        KI(ki_),
                                                                        KD(kd_)
   {
-    // encPrev = 0.0;
-    // angular_vel_Prev = 0.0;
-    // angular_vel_Filt = 0.0;
-    // error_integral = 0.0;
-    // error_previous = 0.0;
   }
   void paramater(float kp_, float ki_, float kd_)
   {
@@ -62,12 +57,32 @@ public:
   float control_angle(float target, float enc, float pwm, float deltaT)
   {
     deg2target = target / 360 * 3840;
+
     err.proportional = deg2target - enc;
+
     err.integral += err.proportional * deltaT;
+
     err.derivative = (err.proportional - err.previous);
     err.previous = err.proportional;
+
     err.u = KP * err.proportional + KI * err.integral + KD * err.derivative;
+
     return fmax(-1 * pwm, fmin(err.u, pwm));
+  }
+
+  float control_angle_speed(float target_angle, float target_speed, float enc, float deltaT)
+  {
+    deg2target = target_angle / 360 * 3840;
+
+    err.proportional = deg2target - enc;
+
+    err.integral += err.proportional * deltaT;
+
+    err.derivative = (err.proportional - err.previous);
+    err.previous = err.proportional;
+
+    err.u = KP * err.proportional + KI * err.integral + KD * err.derivative;
+    return control_speed(target_speed, enc, deltaT);
   }
 
   float control_base(float error, float speed, int condition, float deltaT)
@@ -88,26 +103,26 @@ public:
     {
       eProportional = error;
     }
+
     eIntegral += eProportional * deltaT;
+
     float eDerivative = (eProportional - prevError) / deltaT;
     prevError = eProportional;
+
     float u = kp * eProportional + ki * eIntegral + kd * eDerivative;
     float uT = kpT * eProportional + kiT * eIntegral + kdT * eDerivative;
+
     return condition ? uT : u;
   }
   float control_speed(float target, float enc, float deltaT)
   {
-    /*convert nilai*/
-    radian = (enc - encPrev) / deltaT; // encoder count menjadid encoder count/second
+    radian = (enc - encPrev) / deltaT;
     encPrev = enc;
-    angular_vel = radian / (total_gear_ratio * enc_ppr); // convert encoder count/second jadi radian/second
+    angular_vel = radian / (total_gear_ratio * enc_ppr);
 
-    // masukkan ke low pass filter untuk memperbagus hasil
     angular_vel_Filt = 0.854 * angular_vel_Filt + 0.0728 * angular_vel + 0.0728 * angular_vel_Prev;
     angular_vel_Prev = angular_vel;
 
-    /*hitung pid*/
-    // ubah angular_vel_Filt menjadi angular_vel jika ingin menghitung tanpa filter
     err.proportional = target - angular_vel_Filt;
 
     err.integral += err.proportional * deltaT;

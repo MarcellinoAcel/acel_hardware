@@ -34,6 +34,7 @@ std_msgs__msg__Float32MultiArray checking_input_msg;
 
 rcl_subscription_t button_sub;
 rcl_subscription_t twist_subscriber;
+rcl_subscription_t cmd4amcl;
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
 
@@ -41,6 +42,7 @@ nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
 std_msgs__msg__Int32 button_msg;
+std_msgs__msg__Int32 cmd_amcl_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -49,6 +51,7 @@ rcl_node_t node;
 rcl_timer_t control_timer;
 
 void setMotor(int cwPin, int ccwPin, float pwmVal);
+void breakMotor(int cwPin, int ccwPin, float pwmVal);
 void moveBase();
 void publishData();
 void syncTime();
@@ -61,6 +64,7 @@ bool destroyEntities();
 void flashLED(int n_times);
 template <int j>
 void readEncoder();
+void call_cmd_amcl(const void *msgin);
 
 void dribble_call(float target_angle, float pwm);
 void upperRobot();
@@ -156,11 +160,17 @@ void setup()
         pinMode(dribble_cw, OUTPUT);
         pinMode(dribble_ccw, OUTPUT);
 
+        pinMode(catcher_ccw, OUTPUT);
+        pinMode(catcher_cw, OUTPUT);
+
         analogWriteFrequency(cw[i], PWM_FREQUENCY);
         analogWriteFrequency(ccw[i], PWM_FREQUENCY);
 
         analogWriteFrequency(dribble_cw, PWM_FREQUENCY);
         analogWriteFrequency(dribble_ccw, PWM_FREQUENCY);
+
+        analogWriteFrequency(catcher_cw, PWM_FREQUENCY);
+        analogWriteFrequency(catcher_ccw, PWM_FREQUENCY);
 
         analogWriteResolution(PWM_BITS);
         analogWrite(cw[i], 0);
@@ -230,6 +240,39 @@ void loop()
 
 unsigned long dribble_prevT = 0;
 int cmd_to_dribble = 0;
+
+void catch_ball(float speed_go, float speed_break)
+{
+    int trig_end_limit = digitalRead(prox_end);
+    int trig_start_limit = digitalRead(prox_start);
+    if (speed_go > 0)
+    {
+        if (trig_start_limit == 0)
+        {
+            breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
+            Serial.println("move");
+        }
+        else
+        {
+            setMotor(catcher_cw, catcher_ccw, speed_go);
+        }
+    }
+    else if (speed_go < 0)
+    {
+        if (trig_end_limit == 0)
+        {
+            breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
+        }
+        else
+        {
+            setMotor(catcher_cw, catcher_ccw, speed_go);
+        }
+    }
+    else
+    {
+        setMotor(catcher_cw, catcher_ccw, 0);
+    }
+}
 void dribble_call_once(float target, float pwm)
 {
     while (true)
@@ -249,7 +292,7 @@ void dribble_call_once(float target, float pwm)
         float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
         setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
         dribble_prevT = dribble_currT;
-        if (fabs(toDeg(dribble.get_error())) <5)
+        if (fabs(toDeg(dribble.get_error())) < 5)
         {
             break;
         }
@@ -265,7 +308,7 @@ void dribble_call(float target, float pwm)
 bool buttonPressed = false;
 void upperRobot()
 {
-    if (button_msg.data == 1 && buttonPressed == false)
+    if ((cmd_amcl_msg.data == 1 || button_msg.data == 1) && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
@@ -411,8 +454,14 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
         "button_micros"));
 
+    RCCHECK(rclc_subscription_init_default(
+        &cmd4amcl,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+        "cmd_dribble"));
+
     // create executor
-    RCCHECK(rclc_executor_init(&executor, &support.context, 6, &allocator));
+    RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
@@ -426,6 +475,13 @@ bool createEntities()
         &button_sub,
         &button_msg,
         &subscription_callback,
+        ON_NEW_DATA));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &cmd4amcl,
+        &cmd_amcl_msg,
+        &call_cmd_amcl,
         ON_NEW_DATA));
 
     // publisher
@@ -499,7 +555,12 @@ void twistCallback(const void *msgin)
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     prev_cmd_time = millis();
 }
+void call_cmd_amcl(const void *msgin)
+{
 
+    const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msgin;
+    cmd_amcl_msg = *msg;
+}
 struct timespec getTime()
 {
     struct timespec tp = {0};
@@ -522,6 +583,12 @@ void flashLED(int n_times)
         delay(150);
     }
     delay(1000);
+}
+
+void breakMotor(int cwPin, int ccwPin, float pwmVal)
+{
+    analogWrite(cwPin, pwmVal);
+    analogWrite(ccwPin, pwmVal);
 }
 
 void setMotor(int cwPin, int ccwPin, float pwmVal)
