@@ -33,6 +33,7 @@ std_msgs__msg__Float32MultiArray checking_input_msg;
 // ------------------------------------------------- //
 
 rcl_subscription_t button_sub;
+rcl_subscription_t catch_sub;
 rcl_subscription_t twist_subscriber;
 rcl_subscription_t cmd4amcl;
 rcl_publisher_t odom_publisher;
@@ -42,7 +43,7 @@ nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
 std_msgs__msg__Int32 button_msg;
-std_msgs__msg__Int32 cmd_amcl_msg;
+std_msgs__msg__Int32 catch_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -64,7 +65,8 @@ bool destroyEntities();
 void flashLED(int n_times);
 template <int j>
 void readEncoder();
-void call_cmd_amcl(const void *msgin);
+void catch_callback(const void *msgin);
+void catch_ball(float speed_go, float speed_break);
 
 void dribble_call(float target_angle, float pwm);
 void upperRobot();
@@ -180,6 +182,9 @@ void setup()
         pinMode(encb[i], INPUT);
     }
 
+    pinMode(prox_end, INPUT_PULLUP);
+    pinMode(prox_start, INPUT_PULLUP);
+
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[2]), readEncoder<2>, RISING);
@@ -187,8 +192,10 @@ void setup()
     attachInterrupt(digitalPinToInterrupt(enca[4]), readEncoder<4>, RISING);
     pinMode(LED_PIN, OUTPUT);
 
-    ball_holder.write(60);
-    delay(200);
+    ball_holder.write(80);
+    // delay(500);
+    // ball_holder.write(0);
+    // delay(500);
 }
 float toCount(float count)
 {
@@ -216,21 +223,36 @@ void loop()
         EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
         if (state == AGENT_CONNECTED)
         {
+            int trig_end_limit = digitalRead(prox_end);
+            int trig_start_limit = digitalRead(prox_start);
+
+            if ((trig_end_limit == 0 || trig_start_limit == 0) &&
+                !(button_msg.data == 1 || catch_msg.data == 1))
+            {
+                setMotor(catcher_cw, catcher_ccw, 0);
+            }
             RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
             publishData();
             moveBase();
             upperRobot();
 
-            checking_input_msg.data.data[0] = dribble.get_deg2Targt();    // 1
-            checking_input_msg.data.data[1] = toDeg(pos[4]);              // 2
-            checking_input_msg.data.data[2] = 0;                          // 3
-            checking_input_msg.data.data[3] = toDeg(dribble.get_error()); // 4
+            checking_input_msg.data.data[0] = dribble.get_deg2Targt(); // 1
+            checking_input_msg.data.data[1] = toDeg(pos[4]);           // 2
+            checking_input_msg.data.data[2] = trig_end_limit;          // 3
+            checking_input_msg.data.data[3] = trig_start_limit;        // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
         break;
     case AGENT_DISCONNECTED:
         destroyEntities();
+
+        setMotor(cw[0], ccw[0], 0);
+        setMotor(cw[1], ccw[1], 0);
+        setMotor(cw[2], ccw[2], 0);
+        setMotor(cw[3], ccw[3], 0);
+        setMotor(catcher_cw, catcher_ccw, 0);
+        setMotor(dribble_cw, dribble_ccw, 0);
         state = WAITING_AGENT;
         break;
     default:
@@ -245,12 +267,13 @@ void catch_ball(float speed_go, float speed_break)
 {
     int trig_end_limit = digitalRead(prox_end);
     int trig_start_limit = digitalRead(prox_start);
+
     if (speed_go > 0)
     {
         if (trig_start_limit == 0)
         {
             breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
-            Serial.println("move");
+            // Serial.println("move");
         }
         else
         {
@@ -306,30 +329,41 @@ void dribble_call(float target, float pwm)
     dribble_prevT = dribble_currT;
 }
 bool buttonPressed = false;
+bool catchPressed = false;
 void upperRobot()
 {
-    if ((cmd_amcl_msg.data == 1 || button_msg.data == 1) && buttonPressed == false)
+    // int trig_end_limit = digitalRead(prox_end);
+    // int trig_start_limit = digitalRead(prox_start);
+
+    if (button_msg.data == 1 && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
+    }
+    else if (catch_msg.data == 1)
+    {
+        catch_ball(200, 0);
+        // catchPressed == true;
     }
     else if (button_msg.data == 0)
     {
         buttonPressed = false;
     }
-    if (cmd_to_dribble == 1)
+    else if (cmd_to_dribble == 1)
     {
 
-        ball_holder.write(60);
+        ball_holder.write(80);
         delay(100);
         dribble_call_once(0, 150);
         // delay(1000);
-        dribble_call_once(90, 150);
-        ball_holder.write(120);
+        dribble_call_once(107, 60);
+        ball_holder.write(150);
         delay(100);
-        ball_holder.write(60);
+        dribble_call_once(45, 255);
+        catch_ball(-255, 0);
         delay(100);
-        dribble_call_once(45, 150);
+        ball_holder.write(80);
+        delay(100);
         cmd_to_dribble = 0;
     }
     else
@@ -455,10 +489,10 @@ bool createEntities()
         "button_micros"));
 
     RCCHECK(rclc_subscription_init_default(
-        &cmd4amcl,
+        &catch_sub,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
-        "cmd_dribble"));
+        "button_catcher"));
 
     // create executor
     RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
@@ -479,9 +513,9 @@ bool createEntities()
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
-        &cmd4amcl,
-        &cmd_amcl_msg,
-        &call_cmd_amcl,
+        &catch_sub,
+        &catch_msg,
+        &catch_callback,
         ON_NEW_DATA));
 
     // publisher
@@ -555,11 +589,11 @@ void twistCallback(const void *msgin)
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     prev_cmd_time = millis();
 }
-void call_cmd_amcl(const void *msgin)
+void catch_callback(const void *msgin)
 {
 
     const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msgin;
-    cmd_amcl_msg = *msg;
+    catch_msg = *msg;
 }
 struct timespec getTime()
 {

@@ -101,27 +101,20 @@ LEFT  = Y
 #define MOTOR2_ENCODER_A 26
 #define MOTOR2_ENCODER_B 27
 
-// external Encoder
-#define EXTERNAL_X_ENCODER_A 8
-#define EXTERNAL_X_ENCODER_B 7
-
-#define EXTERNAL_Y_ENCODER_A 32
-#define EXTERNAL_Y_ENCODER_B 31
-
 // dribble motor
-#define dribble_enc_a 34
-#define dribble_enc_b 35
-#define dribble_cw 36
-#define dribble_ccw 37
+#define dribble_enc_a 31
+#define dribble_enc_b 30
+#define dribble_cw 11
+#define dribble_ccw 12
 
 // catcher motor
-#define catcher_cw 33
-#define catcher_ccw 40
-#define prox_start 11
-#define prox_end 12
+#define catcher_cw 36
+#define catcher_ccw 37
+#define prox_start 7
+#define prox_end 32
 
 // servo
-#define servo 9
+#define servo 8
 
 // MOTOR PINS
 
