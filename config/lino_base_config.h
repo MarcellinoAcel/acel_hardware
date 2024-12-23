@@ -168,6 +168,9 @@ struct but
      int LT;
      int LB;
      int RB;
+     int select;
+     int start;
+     int home;
 } button;
 
 #endif

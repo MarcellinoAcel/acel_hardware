@@ -36,6 +36,9 @@ rcl_subscription_t button_sub;
 rcl_subscription_t catch_sub;
 rcl_subscription_t twist_subscriber;
 rcl_subscription_t auto_dribble_cmd;
+rcl_subscription_t start_sub;
+rcl_subscription_t allbutton;
+
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
 
@@ -45,6 +48,8 @@ geometry_msgs__msg__Twist twist_msg;
 std_msgs__msg__Int8 button_msg;
 std_msgs__msg__Int8 catch_msg;
 std_msgs__msg__Int8 cmd_dribble_msg;
+std_msgs__msg__Int8 start_button;
+std_msgs__msg__Int8 allbutton_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -69,6 +74,8 @@ void readEncoder();
 void catch_callback(const void *msgin);
 void catch_ball(float speed_go, float speed_break);
 void autodribbleCallback(const void *msgin);
+void allbuttonCallback(const void *msgin);
+void freedriveUpperRobot();
 
 void dribble_call(float target_angle, float pwm);
 void upperRobot();
@@ -219,6 +226,10 @@ void loop()
         if (state == WAITING_AGENT)
         {
             destroyEntities();
+            for (int i = 0; i < 5; i++)
+            {
+                pos[i] = 0;
+            }
         }
         break;
     case AGENT_CONNECTED:
@@ -237,11 +248,15 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
+            if (button.start == 1)
+            {
+                freedriveUpperRobot();
+            }
 
-            checking_input_msg.data.data[0] = dribble.get_deg2Targt(); // 1
+            checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
             checking_input_msg.data.data[1] = toDeg(pos[4]);           // 2
-            checking_input_msg.data.data[2] = trig_end_limit;          // 3
-            checking_input_msg.data.data[3] = trig_start_limit;        // 4
+            checking_input_msg.data.data[2] = button.start;          // 3
+            checking_input_msg.data.data[3] = 90;        // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -255,6 +270,10 @@ void loop()
         setMotor(cw[3], ccw[3], 0);
         setMotor(catcher_cw, catcher_ccw, 0);
         setMotor(dribble_cw, dribble_ccw, 0);
+        for (int i = 0; i < 5; i++)
+        {
+            pos[i] = 0;
+        }
         state = WAITING_AGENT;
         break;
     default:
@@ -307,10 +326,10 @@ void dribble_call_once(float target, float pwm)
         publishData();
         moveBase();
 
-        checking_input_msg.data.data[0] = dribble.get_deg2Targt();    // 1
+        checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt());    // 1
         checking_input_msg.data.data[1] = toDeg(pos[4]);              // 2
         checking_input_msg.data.data[2] = 0;                          // 3
-        checking_input_msg.data.data[3] = toDeg(dribble.get_error()); // 4
+        checking_input_msg.data.data[3] = 45; // 4
 
         RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         unsigned long dribble_currT = micros();
@@ -336,7 +355,7 @@ void upperRobot()
 {
     // int trig_end_limit = digitalRead(prox_end);
     // int trig_start_limit = digitalRead(prox_start);
-    if ((button_msg.data == 1 || cmd_dribble_msg.data == 1) && buttonPressed == false)
+    if (button_msg.data == 1 && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
@@ -357,7 +376,7 @@ void upperRobot()
         delay(100);
         dribble_call_once(0, 150);
         // delay(1000);
-        dribble_call_once(107, 60);
+        dribble_call_once(107, 70);
         ball_holder.write(150);
         delay(100);
         dribble_call_once(45, 255);
@@ -369,7 +388,7 @@ void upperRobot()
     }
     else
     {
-        dribble_call(10, 100);
+        dribble_call(0, 200);
     }
 }
 
@@ -446,6 +465,13 @@ void moveBase()
     bno.getCalibration(&system, &gyro, &accel, &mag);
 }
 
+void freedriveUpperRobot()
+{
+    pos[4] = 0;
+    setMotor(catcher_cw, catcher_ccw, 0);
+    setMotor(dribble_cw, dribble_ccw, 0);
+}
+
 void publishData()
 {
 
@@ -501,16 +527,28 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "cmd_dribble"));
 
+    RCCHECK(rclc_subscription_init_default(
+        &allbutton,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "allbutton"));
+
     // create executor
-    RCCHECK(rclc_executor_init(&executor, &support.context, 8, &allocator));
+    RCCHECK(rclc_executor_init(&executor, &support.context, 9, &allocator));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &allbutton,
+        &allbutton_msg,
+        &allbuttonCallback,
+        ON_NEW_DATA));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
         &auto_dribble_cmd,
         &cmd_dribble_msg,
         &autodribbleCallback,
-        ON_NEW_DATA
-    ));
+        ON_NEW_DATA));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
@@ -562,11 +600,11 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    // rcl_publisher_fini(&odom_publisher, &node);
-    // rcl_publisher_fini(&imu_publisher, &node);
-    // rcl_subscription_fini(&twist_subscriber, &node);
-    // rcl_node_fini(&node);
-    // rcl_timer_fini(&control_timer);
+    rcl_publisher_fini(&odom_publisher, &node);
+    rcl_publisher_fini(&imu_publisher, &node);
+    rcl_subscription_fini(&twist_subscriber, &node);
+    rcl_node_fini(&node);
+    rcl_timer_fini(&control_timer);
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
 
@@ -610,9 +648,98 @@ void catch_callback(const void *msgin)
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     catch_msg = *msg;
 }
-void autodribbleCallback(const void *msgin){
+void autodribbleCallback(const void *msgin)
+{
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     cmd_dribble_msg = *msg;
+}
+void allbuttonCallback(const void *msgin)
+{
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    allbutton_msg = *msg;
+    /*
+        button.A = msg.data[0];
+        button.B = msg.data[1];
+        button.X = msg.data[3];
+        button.Y = msg.data[4];
+        button.LB = msg.data[6];
+        button.RB = msg.data[7];
+        button.LT = msg.data[8];
+        button.RT = msg.data[9];
+        button.select = msg.data[10];
+        button.start = msg.data[11];
+        button.home = msg.data[12];
+        */
+    int *button_states[] = {
+        &button.A, &button.B, NULL, &button.X, &button.Y,
+        NULL, &button.LB, &button.RB, &button.LT, &button.RT,
+        &button.select, &button.start, &button.home};
+
+    // Reset all buttons
+    for (int i = 0; i < 13; ++i)
+    {
+        if (button_states[i])
+        {
+            *button_states[i] = 0;
+        }
+    }
+
+    // Set the active button
+    if (allbutton_msg.data >= 0 && allbutton_msg.data < 13 && button_states[allbutton_msg.data])
+    {
+        *button_states[allbutton_msg.data] = 1;
+    }
+    // switch (allbutton_msg.data)
+    // {
+    // case 0:
+    //     button.A = 1;
+    //     break;
+    // case 1:
+    //     button.B = 1;
+    //     break;
+    // case 3:
+    //     button.X = 1;
+    //     break;
+    // case 4:
+    //     button.Y = 1;
+    //     break;
+    // case 6:
+    //     button.LB = 1;
+    //     break;
+    // case 7:
+    //     button.RB = 1;
+    //     break;
+    // case 8:
+    //     button.LT = 1;
+    //     break;
+    // case 9:
+    //     button.RT = 1;
+    //     break;
+    // case 10:
+    //     button.select = 1;
+    //     break;
+    // case 11:
+    //     button.start = 1;
+    //     break;
+    // case 12:
+    //     button.home = 1;
+    //     break;
+
+    // default:
+
+    //     button.A = 0;
+    //     button.B = 0;
+    //     button.X = 0;
+    //     button.Y = 0;
+    //     button.RT = 0;
+    //     button.LT = 0;
+    //     button.LB = 0;
+    //     button.RB = 0;
+    //     button.select = 0;
+    //     button.start = 0;
+    //     button.home = 0;
+    //     break;
+    // }
 }
 struct timespec getTime()
 {
