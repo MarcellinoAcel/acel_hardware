@@ -374,7 +374,7 @@ void upperRobot()
 
         ball_holder.write(80);
         delay(100);
-        dribble_call_once(0, 150);
+        // dribble_call_once(0, 150);
         // delay(1000);
         dribble_call_once(107, 70);
         ball_holder.write(150);
@@ -388,7 +388,7 @@ void upperRobot()
     }
     else
     {
-        dribble_call(0, 200);
+        dribble_call(0, 255);
     }
 }
 
