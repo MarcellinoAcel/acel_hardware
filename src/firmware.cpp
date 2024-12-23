@@ -16,7 +16,7 @@
 #include "Servo.h"
 
 #include <std_msgs/msg/float32_multi_array.h>
-#include <std_msgs/msg/int32.h>
+#include <std_msgs/msg/int8.h>
 #include <geometry_msgs/msg/twist.h>
 #include <nav_msgs/msg/odometry.h>
 #include <sensor_msgs/msg/imu.h>
@@ -35,15 +35,16 @@ std_msgs__msg__Float32MultiArray checking_input_msg;
 rcl_subscription_t button_sub;
 rcl_subscription_t catch_sub;
 rcl_subscription_t twist_subscriber;
-rcl_subscription_t cmd4amcl;
+rcl_subscription_t auto_dribble_cmd;
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
 
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
-std_msgs__msg__Int32 button_msg;
-std_msgs__msg__Int32 catch_msg;
+std_msgs__msg__Int8 button_msg;
+std_msgs__msg__Int8 catch_msg;
+std_msgs__msg__Int8 cmd_dribble_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -67,6 +68,7 @@ template <int j>
 void readEncoder();
 void catch_callback(const void *msgin);
 void catch_ball(float speed_go, float speed_break);
+void autodribbleCallback(const void *msgin);
 
 void dribble_call(float target_angle, float pwm);
 void upperRobot();
@@ -334,8 +336,7 @@ void upperRobot()
 {
     // int trig_end_limit = digitalRead(prox_end);
     // int trig_start_limit = digitalRead(prox_start);
-
-    if (button_msg.data == 1 && buttonPressed == false)
+    if ((button_msg.data == 1 || cmd_dribble_msg.data == 1) && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
@@ -472,7 +473,7 @@ bool createEntities()
     RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
 
     // create node
-    RCCHECK(rclc_node_init_default(&node, "micro_ros_arduino_node", "", &support));
+    RCCHECK(rclc_node_init_default(&node, "hardware_node", "", &support));
 
     // create subscriber
     executor = rclc_executor_get_zero_initialized_executor();
@@ -485,17 +486,31 @@ bool createEntities()
     RCCHECK(rclc_subscription_init_default(
         &button_sub,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "button_micros"));
 
     RCCHECK(rclc_subscription_init_default(
         &catch_sub,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int32),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "button_catcher"));
 
+    RCCHECK(rclc_subscription_init_default(
+        &auto_dribble_cmd,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "cmd_dribble"));
+
     // create executor
-    RCCHECK(rclc_executor_init(&executor, &support.context, 7, &allocator));
+    RCCHECK(rclc_executor_init(&executor, &support.context, 8, &allocator));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &auto_dribble_cmd,
+        &cmd_dribble_msg,
+        &autodribbleCallback,
+        ON_NEW_DATA
+    ));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
@@ -578,7 +593,7 @@ void error_loop()
 
 void subscription_callback(const void *msgin)
 {
-    const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msgin;
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     button_msg = *msg;
 }
 
@@ -592,8 +607,12 @@ void twistCallback(const void *msgin)
 void catch_callback(const void *msgin)
 {
 
-    const std_msgs__msg__Int32 *msg = (const std_msgs__msg__Int32 *)msgin;
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     catch_msg = *msg;
+}
+void autodribbleCallback(const void *msgin){
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    cmd_dribble_msg = *msg;
 }
 struct timespec getTime()
 {
