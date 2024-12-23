@@ -352,7 +352,7 @@ bool buttonPressed = false;
 bool catchPressed = false;
 void upperRobot()
 {
-    if (button_msg.data == 1 && buttonPressed == false)
+    if ((cmd_dribble_msg.data == 1 || button_msg.data == 1) && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
