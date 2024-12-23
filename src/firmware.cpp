@@ -254,9 +254,9 @@ void loop()
             }
 
             checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
-            checking_input_msg.data.data[1] = toDeg(pos[4]);           // 2
-            checking_input_msg.data.data[2] = button.start;          // 3
-            checking_input_msg.data.data[3] = 90;        // 4
+            checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+            checking_input_msg.data.data[2] = button.start;                   // 3
+            checking_input_msg.data.data[3] = 90;                             // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -294,7 +294,6 @@ void catch_ball(float speed_go, float speed_break)
         if (trig_start_limit == 0)
         {
             breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
-            // Serial.println("move");
         }
         else
         {
@@ -326,10 +325,10 @@ void dribble_call_once(float target, float pwm)
         publishData();
         moveBase();
 
-        checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt());    // 1
-        checking_input_msg.data.data[1] = toDeg(pos[4]);              // 2
-        checking_input_msg.data.data[2] = 0;                          // 3
-        checking_input_msg.data.data[3] = 45; // 4
+        checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
+        checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+        checking_input_msg.data.data[2] = 0;                              // 3
+        checking_input_msg.data.data[3] = 45;                             // 4
 
         RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         unsigned long dribble_currT = micros();
@@ -353,8 +352,6 @@ bool buttonPressed = false;
 bool catchPressed = false;
 void upperRobot()
 {
-    // int trig_end_limit = digitalRead(prox_end);
-    // int trig_start_limit = digitalRead(prox_start);
     if (button_msg.data == 1 && buttonPressed == false)
     {
         cmd_to_dribble = 1;
@@ -363,7 +360,6 @@ void upperRobot()
     else if (catch_msg.data == 1)
     {
         catch_ball(200, 0);
-        // catchPressed == true;
     }
     else if (button_msg.data == 0)
     {
@@ -374,16 +370,20 @@ void upperRobot()
 
         ball_holder.write(80);
         delay(100);
-        // dribble_call_once(0, 150);
-        // delay(1000);
+
         dribble_call_once(107, 70);
+
         ball_holder.write(150);
         delay(100);
+
         dribble_call_once(45, 255);
+
         catch_ball(-255, 0);
         delay(100);
+
         ball_holder.write(80);
         delay(100);
+
         cmd_to_dribble = 0;
     }
     else
@@ -571,7 +571,7 @@ bool createEntities()
         &catch_callback,
         ON_NEW_DATA));
 
-    // publisher
+    // create publisher
     RCCHECK(rclc_publisher_init_default(
         &checking_input_motor,
         &node,
@@ -657,25 +657,11 @@ void allbuttonCallback(const void *msgin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     allbutton_msg = *msg;
-    /*
-        button.A = msg.data[0];
-        button.B = msg.data[1];
-        button.X = msg.data[3];
-        button.Y = msg.data[4];
-        button.LB = msg.data[6];
-        button.RB = msg.data[7];
-        button.LT = msg.data[8];
-        button.RT = msg.data[9];
-        button.select = msg.data[10];
-        button.start = msg.data[11];
-        button.home = msg.data[12];
-        */
     int *button_states[] = {
         &button.A, &button.B, NULL, &button.X, &button.Y,
         NULL, &button.LB, &button.RB, &button.LT, &button.RT,
         &button.select, &button.start, &button.home};
 
-    // Reset all buttons
     for (int i = 0; i < 13; ++i)
     {
         if (button_states[i])
@@ -684,62 +670,10 @@ void allbuttonCallback(const void *msgin)
         }
     }
 
-    // Set the active button
     if (allbutton_msg.data >= 0 && allbutton_msg.data < 13 && button_states[allbutton_msg.data])
     {
         *button_states[allbutton_msg.data] = 1;
     }
-    // switch (allbutton_msg.data)
-    // {
-    // case 0:
-    //     button.A = 1;
-    //     break;
-    // case 1:
-    //     button.B = 1;
-    //     break;
-    // case 3:
-    //     button.X = 1;
-    //     break;
-    // case 4:
-    //     button.Y = 1;
-    //     break;
-    // case 6:
-    //     button.LB = 1;
-    //     break;
-    // case 7:
-    //     button.RB = 1;
-    //     break;
-    // case 8:
-    //     button.LT = 1;
-    //     break;
-    // case 9:
-    //     button.RT = 1;
-    //     break;
-    // case 10:
-    //     button.select = 1;
-    //     break;
-    // case 11:
-    //     button.start = 1;
-    //     break;
-    // case 12:
-    //     button.home = 1;
-    //     break;
-
-    // default:
-
-    //     button.A = 0;
-    //     button.B = 0;
-    //     button.X = 0;
-    //     button.Y = 0;
-    //     button.RT = 0;
-    //     button.LT = 0;
-    //     button.LB = 0;
-    //     button.RB = 0;
-    //     button.select = 0;
-    //     button.start = 0;
-    //     button.home = 0;
-    //     break;
-    // }
 }
 struct timespec getTime()
 {
