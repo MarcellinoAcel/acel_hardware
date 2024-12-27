@@ -253,10 +253,10 @@ void loop()
                 freedriveUpperRobot();
             }
 
-            checking_input_msg.data.data[0] = button.A; // 1
-            checking_input_msg.data.data[1] = button.Y;                  // 2
-            checking_input_msg.data.data[2] = button.start;                   // 3
-            checking_input_msg.data.data[3] = button.X;                             // 4
+            checking_input_msg.data.data[0] = button.A;     // 1
+            checking_input_msg.data.data[1] = button.Y;     // 2
+            checking_input_msg.data.data[2] = button.start; // 3
+            checking_input_msg.data.data[3] = button.X;     // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -599,11 +599,11 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    rcl_publisher_fini(&odom_publisher, &node);
-    rcl_publisher_fini(&imu_publisher, &node);
-    rcl_subscription_fini(&twist_subscriber, &node);
-    rcl_node_fini(&node);
-    rcl_timer_fini(&control_timer);
+    RCCHECK(rcl_publisher_fini(&odom_publisher, &node));
+    RCCHECK(rcl_publisher_fini(&imu_publisher, &node));
+    RCCHECK(rcl_subscription_fini(&twist_subscriber, &node));
+    RCCHECK(rcl_node_fini(&node));
+    RCCHECK(rcl_timer_fini(&control_timer));
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
 
@@ -656,23 +656,72 @@ void allbuttonCallback(const void *msgin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     allbutton_msg = *msg;
-    int *button_states[] = {
-        &button.A, &button.B, NULL, &button.X, &button.Y,
-        NULL, &button.LB, &button.RB, &button.LT, &button.RT,
-        &button.select, &button.start, &button.home};
-
-    for (int i = 0; i < 13; ++i)
+    switch (allbutton_msg.data)
     {
-        if (button_states[i])
-        {
-            *button_states[i] = 0;
-        }
+    case 0:
+        button.A = 1;
+        break;
+    case 1:
+        button.B = 1;
+        break;
+    case 3:
+        button.X = 1;
+        break;
+    case 4:
+        button.Y = 1;
+        break;
+    case 6:
+        button.LB = 1;
+        break;
+    case 7:
+        button.RB = 1;
+        break;
+    case 8:
+        button.LT = 1;
+        break;
+    case 9:
+        button.RT = 1;
+        break;
+    case 10:
+        button.select = 1;
+        break;
+    case 11:
+        button.start = 1;
+        break;
+    case 12:
+        button.home = 1;
+        break;
+    default:
+        button.A = 0;
+        button.B = 0;
+        button.X = 0;
+        button.Y = 0;
+        button.LB = 0;
+        button.RB = 0;
+        button.LT = 0;
+        button.RT = 0;
+        button.select = 0;
+        button.start = 0;
+        button.home = 0;
+        break;
     }
+    // int *button_states[] = {
+    //     &button.A, &button.B, NULL, &button.X, &button.Y,
+    //     NULL, &button.LB, &button.RB, &button.LT, &button.RT,
+    //     &button.select, &button.start, &button.home};
 
-    if (allbutton_msg.data >= 0 && allbutton_msg.data < 13 && button_states[allbutton_msg.data])
-    {
-        *button_states[allbutton_msg.data] = 1;
-    }
+    // for (int i = 0; i < 13; ++i)
+    // {
+    //     if (button_states[i])
+    //     {
+    //         *button_states[i] = 0;
+    //     }
+    // }
+
+    // if (allbutton_msg.data >= 0 && allbutton_msg.data < 13 && button_states[allbutton_msg.data])
+    // {
+    //     *button_states[allbutton_msg.data] = 1;
+    // }
 }
 struct timespec getTime()
 {
