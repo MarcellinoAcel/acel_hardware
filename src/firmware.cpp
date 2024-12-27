@@ -253,10 +253,10 @@ void loop()
                 freedriveUpperRobot();
             }
 
-            checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
-            checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+            checking_input_msg.data.data[0] = button.A; // 1
+            checking_input_msg.data.data[1] = button.Y;                  // 2
             checking_input_msg.data.data[2] = button.start;                   // 3
-            checking_input_msg.data.data[3] = 90;                             // 4
+            checking_input_msg.data.data[3] = button.X;                             // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -349,7 +349,6 @@ void dribble_call(float target, float pwm)
     dribble_prevT = dribble_currT;
 }
 bool buttonPressed = false;
-bool catchPressed = false;
 void upperRobot()
 {
     if ((cmd_dribble_msg.data == 1 || button_msg.data == 1) && buttonPressed == false)
