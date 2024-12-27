@@ -173,4 +173,6 @@ struct but
      int home;
 } button;
 
+int solenoid = 34;
+
 #endif

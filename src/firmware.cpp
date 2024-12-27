@@ -162,7 +162,7 @@ void setup()
     }
 
     ball_holder.attach(servo);
-
+    pinMode(solenoid, OUTPUT);
     for (int i = 0; i < 5; i++)
     {
         pinMode(cw[i], OUTPUT);
