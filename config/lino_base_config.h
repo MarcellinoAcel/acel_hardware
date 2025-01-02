@@ -175,4 +175,5 @@ struct but
 
 int solenoid = 34;
 
+int laser = 20;
 #endif

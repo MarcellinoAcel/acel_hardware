@@ -38,6 +38,7 @@ rcl_subscription_t twist_subscriber;
 rcl_subscription_t auto_dribble_cmd;
 rcl_subscription_t start_sub;
 rcl_subscription_t allbutton;
+rcl_subscription_t push_sub;
 
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
@@ -50,6 +51,7 @@ std_msgs__msg__Int8 catch_msg;
 std_msgs__msg__Int8 cmd_dribble_msg;
 std_msgs__msg__Int8 start_button;
 std_msgs__msg__Int8 allbutton_msg;
+std_msgs__msg__Int8 push_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -75,6 +77,7 @@ void catch_callback(const void *msgin);
 void catch_ball(float speed_go, float speed_break);
 void autodribbleCallback(const void *msgin);
 void allbuttonCallback(const void *msgin);
+void push_callback(const void *msgin);
 void freedriveUpperRobot();
 
 void dribble_call(float target_angle, float pwm);
@@ -194,6 +197,8 @@ void setup()
     pinMode(prox_end, INPUT_PULLUP);
     pinMode(prox_start, INPUT_PULLUP);
 
+    pinMode(laser, OUTPUT);
+
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[2]), readEncoder<2>, RISING);
@@ -248,15 +253,16 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
+            digitalWrite(laser, HIGH);
             if (button.start == 1)
             {
                 freedriveUpperRobot();
             }
 
-            checking_input_msg.data.data[0] = button.A;     // 1
-            checking_input_msg.data.data[1] = button.Y;     // 2
-            checking_input_msg.data.data[2] = button.start; // 3
-            checking_input_msg.data.data[3] = button.X;     // 4
+            checking_input_msg.data.data[0] = pos[0]; // wheel1.get_filt_vel();     // 1
+            checking_input_msg.data.data[1] = pos[1]; // wheel2.get_filt_vel();     // 2
+            checking_input_msg.data.data[2] = pos[2]; // wheel3.get_filt_vel(); // 3
+            checking_input_msg.data.data[3] = pos[3]; // wheel4.get_filt_vel();     // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -526,21 +532,34 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "cmd_dribble"));
 
+    // RCCHECK(rclc_subscription_init_default(
+    //     &allbutton,
+    //     &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+    //     "allbutton"));
+
     RCCHECK(rclc_subscription_init_default(
-        &allbutton,
+        &push_sub,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-        "allbutton"));
+        "push2launch"));
 
     // create executor
     RCCHECK(rclc_executor_init(&executor, &support.context, 9, &allocator));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
-        &allbutton,
-        &allbutton_msg,
-        &allbuttonCallback,
+        &push_sub,
+        &push_msg,
+        &push_callback,
         ON_NEW_DATA));
+
+    // RCCHECK(rclc_executor_add_subscription(
+    //     &executor,
+    //     &allbutton,
+    //     &allbutton_msg,
+    //     &allbuttonCallback,
+    //     ON_NEW_DATA));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
@@ -651,6 +670,25 @@ void autodribbleCallback(const void *msgin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     cmd_dribble_msg = *msg;
+}
+bool button_push = false;
+void push_callback(const void *msgin)
+{
+
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    push_msg = *msg;
+    if (push_msg.data == 1 && button_push == false)
+    {
+        digitalWrite(solenoid, 1);
+        delay(500);
+        digitalWrite(solenoid, 0);
+        delay(100);
+        button_push = true;
+    }
+    else if (push_msg.data == 0)
+    {
+        button_push = false;
+    }
 }
 void allbuttonCallback(const void *msgin)
 {

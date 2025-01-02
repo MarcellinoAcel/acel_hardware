@@ -126,7 +126,7 @@ public:
     err.proportional = target - angular_vel_Filt;
 
     err.integral += err.proportional * deltaT;
-
+    fmax(-125, fmin(err.integral, 125));
     err.derivative = (err.proportional - err.previous) / deltaT;
     err.previous = err.proportional;
 
