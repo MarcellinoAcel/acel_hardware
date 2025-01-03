@@ -38,7 +38,7 @@ rcl_subscription_t twist_subscriber;
 rcl_subscription_t auto_dribble_cmd;
 rcl_subscription_t start_sub;
 rcl_subscription_t allbutton;
-rcl_subscription_t push_sub;
+rcl_subscription_t laser_sub;
 
 rcl_publisher_t odom_publisher;
 rcl_publisher_t imu_publisher;
@@ -46,12 +46,13 @@ rcl_publisher_t imu_publisher;
 nav_msgs__msg__Odometry odom_msg;
 sensor_msgs__msg__Imu imu_msg;
 geometry_msgs__msg__Twist twist_msg;
+
 std_msgs__msg__Int8 button_msg;
 std_msgs__msg__Int8 catch_msg;
 std_msgs__msg__Int8 cmd_dribble_msg;
 std_msgs__msg__Int8 start_button;
 std_msgs__msg__Int8 allbutton_msg;
-std_msgs__msg__Int8 push_msg;
+std_msgs__msg__Int8 laser_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -77,7 +78,7 @@ void catch_callback(const void *msgin);
 void catch_ball(float speed_go, float speed_break);
 void autodribbleCallback(const void *msgin);
 void allbuttonCallback(const void *msgin);
-void push_callback(const void *msgin);
+void laser_callback(const void *msgin);
 void freedriveUpperRobot();
 
 void dribble_call(float target_angle, float pwm);
@@ -197,7 +198,8 @@ void setup()
     pinMode(prox_end, INPUT_PULLUP);
     pinMode(prox_start, INPUT_PULLUP);
 
-    pinMode(laser, OUTPUT);
+    pinMode(laser1, OUTPUT);
+    pinMode(laser2, OUTPUT);
 
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
@@ -245,7 +247,7 @@ void loop()
             int trig_start_limit = digitalRead(prox_start);
 
             if ((trig_end_limit == 0 || trig_start_limit == 0) &&
-                !(button_msg.data == 1 || catch_msg.data == 1))
+                !(button.start == 1 || button.LT == 1))
             {
                 setMotor(catcher_cw, catcher_ccw, 0);
             }
@@ -253,16 +255,15 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
-            digitalWrite(laser, HIGH);
             if (button.start == 1)
             {
                 freedriveUpperRobot();
             }
 
-            checking_input_msg.data.data[0] = pos[0]; // wheel1.get_filt_vel();     // 1
-            checking_input_msg.data.data[1] = pos[1]; // wheel2.get_filt_vel();     // 2
-            checking_input_msg.data.data[2] = pos[2]; // wheel3.get_filt_vel(); // 3
-            checking_input_msg.data.data[3] = pos[3]; // wheel4.get_filt_vel();     // 4
+            checking_input_msg.data.data[0] = allbutton_msg.data; // wheel1.get_filt_vel();     // 1
+            checking_input_msg.data.data[1] = button.start;       // wheel2.get_filt_vel();     // 2
+            checking_input_msg.data.data[2] = button.select;      // wheel3.get_filt_vel(); // 3
+            checking_input_msg.data.data[3] = pos[3];             // wheel4.get_filt_vel();     // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -357,16 +358,16 @@ void dribble_call(float target, float pwm)
 bool buttonPressed = false;
 void upperRobot()
 {
-    if ((cmd_dribble_msg.data == 1 || button_msg.data == 1) && buttonPressed == false)
+    if ((cmd_dribble_msg.data == 1 || button.RT == 1) && buttonPressed == false)
     {
         cmd_to_dribble = 1;
         buttonPressed = true;
     }
-    else if (catch_msg.data == 1)
+    else if (button.LT == 1)
     {
         catch_ball(200, 0);
     }
-    else if (button_msg.data == 0)
+    else if (button.RT == 0)
     {
         buttonPressed = false;
     }
@@ -515,51 +516,39 @@ bool createEntities()
         "omni_cont/cmd_vel"));
 
     RCCHECK(rclc_subscription_init_default(
-        &button_sub,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-        "button_micros"));
-
-    RCCHECK(rclc_subscription_init_default(
-        &catch_sub,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-        "button_catcher"));
-
-    RCCHECK(rclc_subscription_init_default(
         &auto_dribble_cmd,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "cmd_dribble"));
 
-    // RCCHECK(rclc_subscription_init_default(
-    //     &allbutton,
-    //     &node,
-    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-    //     "allbutton"));
-
     RCCHECK(rclc_subscription_init_default(
-        &push_sub,
+        &allbutton,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
-        "push2launch"));
+        "allbutton"));
+
+    RCCHECK(rclc_subscription_init_default(
+        &laser_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "laser_indicator"));
 
     // create executor
     RCCHECK(rclc_executor_init(&executor, &support.context, 9, &allocator));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
-        &push_sub,
-        &push_msg,
-        &push_callback,
+        &laser_sub,
+        &laser_msg,
+        &laser_callback,
         ON_NEW_DATA));
 
-    // RCCHECK(rclc_executor_add_subscription(
-    //     &executor,
-    //     &allbutton,
-    //     &allbutton_msg,
-    //     &allbuttonCallback,
-    //     ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &allbutton,
+        &allbutton_msg,
+        &allbuttonCallback,
+        ON_NEW_DATA));
 
     RCCHECK(rclc_executor_add_subscription(
         &executor,
@@ -573,20 +562,6 @@ bool createEntities()
         &twist_subscriber,
         &twist_msg,
         &twistCallback,
-        ON_NEW_DATA));
-
-    RCCHECK(rclc_executor_add_subscription(
-        &executor,
-        &button_sub,
-        &button_msg,
-        &subscription_callback,
-        ON_NEW_DATA));
-
-    RCCHECK(rclc_executor_add_subscription(
-        &executor,
-        &catch_sub,
-        &catch_msg,
-        &catch_callback,
         ON_NEW_DATA));
 
     // create publisher
@@ -660,34 +635,27 @@ void twistCallback(const void *msgin)
     digitalWrite(LED_PIN, !digitalRead(LED_PIN));
     prev_cmd_time = millis();
 }
-void catch_callback(const void *msgin)
-{
-
-    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
-    catch_msg = *msg;
-}
 void autodribbleCallback(const void *msgin)
 {
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     cmd_dribble_msg = *msg;
 }
 bool button_push = false;
-void push_callback(const void *msgin)
+int increment = 0;
+void laser_callback(const void *msgin)
 {
 
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
-    push_msg = *msg;
-    if (push_msg.data == 1 && button_push == false)
+    laser_msg = *msg;
+    if (laser_msg.data == 1)
     {
-        digitalWrite(solenoid, 1);
-        delay(500);
-        digitalWrite(solenoid, 0);
-        delay(100);
-        button_push = true;
+        digitalWrite(laser1, 1);
+        digitalWrite(laser2, 1);
     }
-    else if (push_msg.data == 0)
+    else if (laser_msg.data == 0)
     {
-        button_push = false;
+        digitalWrite(laser1, 0);
+        digitalWrite(laser2, 0);
     }
 }
 void allbuttonCallback(const void *msgin)
@@ -743,24 +711,20 @@ void allbuttonCallback(const void *msgin)
         button.home = 0;
         break;
     }
-    // int *button_states[] = {
-    //     &button.A, &button.B, NULL, &button.X, &button.Y,
-    //     NULL, &button.LB, &button.RB, &button.LT, &button.RT,
-    //     &button.select, &button.start, &button.home};
-
-    // for (int i = 0; i < 13; ++i)
-    // {
-    //     if (button_states[i])
-    //     {
-    //         *button_states[i] = 0;
-    //     }
-    // }
-
-    // if (allbutton_msg.data >= 0 && allbutton_msg.data < 13 && button_states[allbutton_msg.data])
-    // {
-    //     *button_states[allbutton_msg.data] = 1;
-    // }
+    if (button.start == 1 && button_push == false)
+    {
+        digitalWrite(solenoid, 1);
+        delay(500);
+        digitalWrite(solenoid, 0);
+        delay(100);
+        button_push = true;
+    }
+    else if (button.start == 0)
+    {
+        button_push = false;
+    }
 }
+
 struct timespec getTime()
 {
     struct timespec tp = {0};
