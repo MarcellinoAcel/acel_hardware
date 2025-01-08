@@ -209,9 +209,6 @@ void setup()
     pinMode(LED_PIN, OUTPUT);
 
     ball_holder.write(80);
-    // delay(500);
-    // ball_holder.write(0);
-    // delay(500);
 }
 float toCount(float count)
 {
@@ -277,10 +274,6 @@ void loop()
         setMotor(cw[3], ccw[3], 0);
         setMotor(catcher_cw, catcher_ccw, 0);
         setMotor(dribble_cw, dribble_ccw, 0);
-        for (int i = 0; i < 5; i++)
-        {
-            pos[i] = 0;
-        }
         state = WAITING_AGENT;
         break;
     default:
