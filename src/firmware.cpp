@@ -252,15 +252,15 @@ void loop()
             publishData();
             moveBase();
             upperRobot();
-            if (button.start == 1)
+            if (button.select == 1)
             {
                 freedriveUpperRobot();
             }
 
-            checking_input_msg.data.data[0] = allbutton_msg.data; // wheel1.get_filt_vel();     // 1
-            checking_input_msg.data.data[1] = button.start;       // wheel2.get_filt_vel();     // 2
-            checking_input_msg.data.data[2] = button.select;      // wheel3.get_filt_vel(); // 3
-            checking_input_msg.data.data[3] = pos[3];             // wheel4.get_filt_vel();     // 4
+            checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
+            checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+            checking_input_msg.data.data[2] = 0;                              // 3
+            checking_input_msg.data.data[3] = 90;                             // 4
 
             RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
@@ -466,9 +466,16 @@ void moveBase()
 
 void freedriveUpperRobot()
 {
-    pos[4] = 0;
+    // pos[4] = 0;
     setMotor(catcher_cw, catcher_ccw, 0);
     setMotor(dribble_cw, dribble_ccw, 0);
+
+    checking_input_msg.data.data[0] = 404;
+    checking_input_msg.data.data[1] = 404;
+    checking_input_msg.data.data[2] = 404;
+    checking_input_msg.data.data[3] = 404;
+
+    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
 }
 
 void publishData()
