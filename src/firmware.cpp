@@ -2,59 +2,94 @@
 #include <stdio.h>
 
 #include <micro_ros_platformio.h>
+
 #include <rcl/rcl.h>
 #include <rcl/error_handling.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
-#include <nav_msgs/msg/odometry.h>
-#include <sensor_msgs/msg/imu.h>
-#include <geometry_msgs/msg/twist.h>
-#include <geometry_msgs/msg/vector3.h>
-#include <std_msgs/msg/float32_multi_array.h>
 
 #include "odometry.h"
 #include "config.h"
 #include "kinematics.h"
 #include "pid.h"
-#include "speed.h"
 #include "imu.h"
+#include "Servo.h"
+
+#include <std_msgs/msg/float32_multi_array.h>
+#include <std_msgs/msg/int8.h>
+#include <geometry_msgs/msg/twist.h>
+#include <nav_msgs/msg/odometry.h>
+#include <sensor_msgs/msg/imu.h>
 
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
-const int motorPWM = 6;
-const int motorCW = 7;
-const int motorCCW = 8;
+// ------------------------------------------------- //
+// anomali
+rcl_publisher_t checking_input_motor;
+std_msgs__msg__Float32MultiArray checking_input_msg;
+// ------------------------------------------------- //
 
-Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
+rcl_subscription_t button_sub;
+rcl_subscription_t catch_sub;
+rcl_subscription_t twist_subscriber;
+rcl_subscription_t auto_dribble_cmd;
+rcl_subscription_t start_sub;
+rcl_subscription_t allbutton;
+rcl_subscription_t laser_sub;
 
-Speed enc_x(1024, 0.04695);
-Speed enc_y(1024, 0.04695);
+rcl_publisher_t odom_publisher;
+rcl_publisher_t imu_publisher;
 
-Speed enc1(COUNTS_PER_REV1, WHEEL_DIAMETER);
-Speed enc2(COUNTS_PER_REV2, WHEEL_DIAMETER);
-Speed enc3(COUNTS_PER_REV3, WHEEL_DIAMETER);
-Speed enc4(COUNTS_PER_REV4, WHEEL_DIAMETER);
+nav_msgs__msg__Odometry odom_msg;
+sensor_msgs__msg__Imu imu_msg;
+geometry_msgs__msg__Twist twist_msg;
 
-void rclErrorLoop();
-void flashLED(int n_times);
-bool destroyEntities();
-void fullStop();
-void syncTime();
-struct timespec getTime();
+std_msgs__msg__Int8 button_msg;
+std_msgs__msg__Int8 catch_msg;
+std_msgs__msg__Int8 cmd_dribble_msg;
+std_msgs__msg__Int8 start_button;
+std_msgs__msg__Int8 allbutton_msg;
+std_msgs__msg__Int8 laser_msg;
+
+rclc_executor_t executor;
+rclc_support_t support;
+rcl_allocator_t allocator;
+rcl_node_t node;
+rcl_timer_t control_timer;
+
 void setMotor(int cwPin, int ccwPin, float pwmVal);
+void breakMotor(int cwPin, int ccwPin, float pwmVal);
 void moveBase();
 void publishData();
+void syncTime();
+void error_loop();
+void subscription_callback(const void *msgin);
 void twistCallback(const void *msgin);
+struct timespec getTime();
+bool createEntities();
+bool destroyEntities();
+void flashLED(int n_times);
+template <int j>
+void readEncoder();
+void catch_callback(const void *msgin);
+void catch_ball(float speed_go, float speed_break);
+void autodribbleCallback(const void *msgin);
+void allbuttonCallback(const void *msgin);
+void laser_callback(const void *msgin);
+void freedriveUpperRobot();
+
+void dribble_call(float target_angle, float pwm);
+void upperRobot();
 
 #define RCCHECK(fn)                  \
     {                                \
         rcl_ret_t temp_rc = fn;      \
         if ((temp_rc != RCL_RET_OK)) \
         {                            \
-            rclErrorLoop();          \
+            error_loop();            \
         }                            \
     }
 #define RCSOFTCHECK(fn)              \
@@ -79,27 +114,10 @@ void twistCallback(const void *msgin);
         }                                  \
     } while (0)
 
-rcl_publisher_t odom_publisher;
-rcl_publisher_t imu_publisher;
-rcl_subscription_t twist_subscriber;
-rcl_publisher_t checking_output_motor;
-rcl_publisher_t checking_input_motor;
-
-nav_msgs__msg__Odometry odom_msg;
-sensor_msgs__msg__Imu imu_msg;
-geometry_msgs__msg__Twist twist_msg;
-std_msgs__msg__Float32MultiArray checking_output_msg;
-std_msgs__msg__Float32MultiArray checking_input_msg;
-
-rclc_executor_t executor;
-rclc_support_t support;
-rcl_allocator_t allocator;
-rcl_node_t node;
-rcl_timer_t control_timer;
-
 unsigned long long time_offset = 0;
 unsigned long prev_cmd_time = 0;
 unsigned long prev_odom_update = 0;
+unsigned long prevT = 0;
 
 enum states
 {
@@ -109,15 +127,18 @@ enum states
     AGENT_DISCONNECTED
 } state;
 
-const int enca[6] = {MOTOR1_ENCODER_A, MOTOR2_ENCODER_A, MOTOR3_ENCODER_A, MOTOR4_ENCODER_A, EXTERNAL_X_ENCODER_A, EXTERNAL_Y_ENCODER_A};
-const int encb[6] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR4_ENCODER_B, EXTERNAL_X_ENCODER_B, EXTERNAL_Y_ENCODER_B};
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire2);
 
-volatile long pos[6];
+const int enca[5] = {MOTOR1_ENCODER_A, MOTOR2_ENCODER_A, MOTOR3_ENCODER_A, MOTOR4_ENCODER_A, dribble_enc_a};
+const int encb[5] = {MOTOR1_ENCODER_B, MOTOR2_ENCODER_B, MOTOR3_ENCODER_B, MOTOR4_ENCODER_B, dribble_enc_b};
 
-PID wheel1(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
+volatile long pos[5];
+
+PID wheel1(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel2(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
-PID wheel3(PWM_MIN, PWM_MAX, K_P + 2, K_I, K_D);
+PID wheel3(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
 PID wheel4(PWM_MIN, PWM_MAX, K_P, K_I, K_D);
+PID dribble(PWM_MIN, PWM_MAX, drib_kp, drib_ki, drib_kd);
 
 Kinematics kinematics(
     Kinematics::LINO_BASE,
@@ -129,81 +150,13 @@ Kinematics kinematics(
     ROBOT_DIAMETER);
 
 Odometry odometry;
+
 IMU imu_sensor;
-bool createEntities()
-{
-    allocator = rcl_get_default_allocator();
-    // create init_options
-    RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
-    // create node
-    RCCHECK(rclc_node_init_default(&node, "linorobot_base_node", "", &support));
-    // create odometry publisher
-    RCCHECK(rclc_publisher_init_default(
-        &odom_publisher,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
-        "odom/unfiltered"));
-    // create IMU publisher
-    RCCHECK(rclc_publisher_init_default(
-        &imu_publisher,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
-        "imu/data"));
-    // create twist command subscriber
-    RCCHECK(rclc_subscription_init_default(
-        &twist_subscriber,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-        "omni_cont/cmd_vel"));
-    // trouble shooting
-    RCCHECK(rclc_publisher_init_default(
-        &checking_output_motor,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-        "checking_output"));
-    checking_output_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
-    checking_output_msg.data.size = 4;
-    RCCHECK(rclc_publisher_init_default(
-        &checking_input_motor,
-        &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-        "checking_input"));
-    checking_input_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
-    checking_input_msg.data.size = 4;
-    executor = rclc_executor_get_zero_initialized_executor();
-    RCCHECK(rclc_executor_init(&executor, &support.context, 2, &allocator));
-    RCCHECK(rclc_executor_add_subscription(
-        &executor,
-        &twist_subscriber,
-        &twist_msg,
-        &twistCallback,
-        ON_NEW_DATA));
-    RCCHECK(rclc_executor_add_timer(&executor, &control_timer));
 
-    syncTime();
-    digitalWrite(LED_PIN, HIGH);
-
-    return true;
-}
-
-template <int j>
-void readEncoder()
-{
-    int b = digitalRead(encb[j]);
-    if (b > 0)
-    {
-        pos[j]++;
-    }
-    else
-    {
-        pos[j]--;
-    }
-}
+Servo ball_holder;
 
 void setup()
 {
-    pinMode(LED_PIN, OUTPUT);
-
     Serial.begin(115200);
     set_microros_serial_transports(Serial);
 
@@ -211,30 +164,60 @@ void setup()
     {
         flashLED(3);
     }
-    for (int i = 0; i < 4; i++)
+
+    ball_holder.attach(servo);
+    pinMode(solenoid, OUTPUT);
+    for (int i = 0; i < 5; i++)
     {
         pinMode(cw[i], OUTPUT);
         pinMode(ccw[i], OUTPUT);
+
+        pinMode(dribble_cw, OUTPUT);
+        pinMode(dribble_ccw, OUTPUT);
+
+        pinMode(catcher_ccw, OUTPUT);
+        pinMode(catcher_cw, OUTPUT);
+
         analogWriteFrequency(cw[i], PWM_FREQUENCY);
         analogWriteFrequency(ccw[i], PWM_FREQUENCY);
+
+        analogWriteFrequency(dribble_cw, PWM_FREQUENCY);
+        analogWriteFrequency(dribble_ccw, PWM_FREQUENCY);
+
+        analogWriteFrequency(catcher_cw, PWM_FREQUENCY);
+        analogWriteFrequency(catcher_ccw, PWM_FREQUENCY);
+
         analogWriteResolution(PWM_BITS);
         analogWrite(cw[i], 0);
         analogWrite(ccw[i], 0);
-    }
-    for (int j = 0; j < 6; j++)
-    {
 
-        pinMode(enca[j], INPUT);
-        pinMode(encb[j], INPUT);
+        pinMode(enca[i], INPUT);
+        pinMode(encb[i], INPUT);
     }
+
+    pinMode(prox_end, INPUT_PULLUP);
+    pinMode(prox_start, INPUT_PULLUP);
+
+    pinMode(laser1, OUTPUT);
+    pinMode(laser2, OUTPUT);
+
     attachInterrupt(digitalPinToInterrupt(enca[0]), readEncoder<0>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[1]), readEncoder<1>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[2]), readEncoder<2>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[3]), readEncoder<3>, RISING);
     attachInterrupt(digitalPinToInterrupt(enca[4]), readEncoder<4>, RISING);
-    attachInterrupt(digitalPinToInterrupt(enca[5]), readEncoder<5>, RISING);
-}
+    pinMode(LED_PIN, OUTPUT);
 
+    ball_holder.write(80);
+}
+float toCount(float count)
+{
+    return 3830 * (count / 360);
+}
+float toDeg(float count)
+{
+    return 360 * (count / 3840);
+}
 void loop()
 {
     switch (state)
@@ -247,19 +230,50 @@ void loop()
         if (state == WAITING_AGENT)
         {
             destroyEntities();
+            for (int i = 0; i < 5; i++)
+            {
+                pos[i] = 0;
+            }
         }
         break;
     case AGENT_CONNECTED:
         EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
         if (state == AGENT_CONNECTED)
         {
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1));
+            int trig_end_limit = digitalRead(prox_end);
+            int trig_start_limit = digitalRead(prox_start);
+
+            if ((trig_end_limit == 0 || trig_start_limit == 0) &&
+                !(button.start == 1 || button.LT == 1))
+            {
+                setMotor(catcher_cw, catcher_ccw, 0);
+            }
+            RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
             publishData();
             moveBase();
+            upperRobot();
+            if (button.select == 1)
+            {
+                freedriveUpperRobot();
+            }
+
+            checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
+            checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+            checking_input_msg.data.data[2] = 0;                              // 3
+            checking_input_msg.data.data[3] = 90;                             // 4
+
+            RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
         }
         break;
     case AGENT_DISCONNECTED:
         destroyEntities();
+
+        setMotor(cw[0], ccw[0], 0);
+        setMotor(cw[1], ccw[1], 0);
+        setMotor(cw[2], ccw[2], 0);
+        setMotor(cw[3], ccw[3], 0);
+        setMotor(catcher_cw, catcher_ccw, 0);
+        setMotor(dribble_cw, dribble_ccw, 0);
         state = WAITING_AGENT;
         break;
     default:
@@ -267,48 +281,119 @@ void loop()
     }
 }
 
-void setMotor(int cwPin, int ccwPin, float pwmVal)
+unsigned long dribble_prevT = 0;
+int cmd_to_dribble = 0;
+
+void catch_ball(float speed_go, float speed_break)
 {
-    if (pwmVal > 0)
+    int trig_end_limit = digitalRead(prox_end);
+    int trig_start_limit = digitalRead(prox_start);
+
+    if (speed_go > 0)
     {
-        analogWrite(cwPin, fabs(pwmVal));
-        analogWrite(ccwPin, 0);
+        if (trig_start_limit == 0)
+        {
+            breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
+        }
+        else
+        {
+            setMotor(catcher_cw, catcher_ccw, speed_go);
+        }
     }
-    else if (pwmVal < 0)
+    else if (speed_go < 0)
     {
-        analogWrite(cwPin, 0);
-        analogWrite(ccwPin, fabs(pwmVal));
+        if (trig_end_limit == 0)
+        {
+            breakMotor(catcher_cw, catcher_ccw, fabs(speed_break));
+        }
+        else
+        {
+            setMotor(catcher_cw, catcher_ccw, speed_go);
+        }
     }
     else
     {
-        analogWrite(cwPin, 0);
-        analogWrite(ccwPin, 0);
+        setMotor(catcher_cw, catcher_ccw, 0);
     }
 }
-
-float prevT = 0;
-float deltaT = 0;
-float x_pos_ = 0;
-float y_pos_ = 0;
-float heading_ = 0;
-
-Kinematics::velocities base_position_control(float x, float y, float z)
+void dribble_call_once(float target, float pwm)
 {
+    while (true)
+    {
 
-    Kinematics::rps req_rps = kinematics.getRPS(
-        twist_msg.linear.x,
-        twist_msg.linear.y,
-        twist_msg.angular.z);
+        RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
+        publishData();
+        moveBase();
+
+        checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
+        checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
+        checking_input_msg.data.data[2] = 0;                              // 3
+        checking_input_msg.data.data[3] = 45;                             // 4
+
+        RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+        unsigned long dribble_currT = micros();
+        float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+        setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
+        dribble_prevT = dribble_currT;
+        if (fabs(toDeg(dribble.get_error())) < 5)
+        {
+            break;
+        }
+    }
+}
+void dribble_call(float target, float pwm)
+{
+    unsigned long dribble_currT = micros();
+    float deltaT = ((float)(dribble_currT - dribble_prevT)) / 1.0e6;
+    setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
+    dribble_prevT = dribble_currT;
+}
+bool buttonPressed = false;
+void upperRobot()
+{
+    if ((cmd_dribble_msg.data == 1 || button.RT == 1) && buttonPressed == false)
+    {
+        cmd_to_dribble = 1;
+        buttonPressed = true;
+    }
+    else if (button.LT == 1)
+    {
+        catch_ball(200, 0);
+    }
+    else if (button.RT == 0)
+    {
+        buttonPressed = false;
+    }
+    else if (cmd_to_dribble == 1)
+    {
+
+        ball_holder.write(80);
+        delay(100);
+
+        dribble_call_once(107, 70);
+
+        ball_holder.write(150);
+        delay(100);
+
+        dribble_call_once(45, 255);
+
+        catch_ball(-255, 0);
+        delay(100);
+
+        ball_holder.write(80);
+        delay(100);
+
+        cmd_to_dribble = 0;
+    }
+    else
+    {
+        dribble_call(0, 255);
+    }
 }
 
 void moveBase()
 {
-    sensors_event_t angVelocityData, linearVelocityData, orientationData;
-    bno.getEvent(&angVelocityData, Adafruit_BNO055::VECTOR_GYROSCOPE);
-    bno.getEvent(&linearVelocityData, Adafruit_BNO055::VECTOR_LINEARACCEL);
-    bno.getEvent(&orientationData, Adafruit_BNO055::VECTOR_EULER);
-
-    float currT = micros();
+    unsigned long currT = micros();
     float deltaT = ((float)(currT - prevT)) / 1.0e6;
 
     if (((millis() - prev_cmd_time) >= 200))
@@ -364,12 +449,6 @@ void moveBase()
         current_rps3,
         current_rps4);
 
-    checking_input_msg.data.data[0] = fabs(req_rps.motor1); // 1
-    checking_input_msg.data.data[1] = fabs(req_rps.motor2); // 2
-    checking_input_msg.data.data[2] = fabs(req_rps.motor3); // 3
-    checking_input_msg.data.data[3] = fabs(req_rps.motor4); // 4
-
-    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
     unsigned long now = millis();
     float vel_dt = (now - prev_odom_update) / 1000.0;
     prev_odom_update = now;
@@ -379,17 +458,24 @@ void moveBase()
         vel.linear_y,
         vel.angular_z);
 
-    checking_output_msg.data.data[0] = fabs(current_rps1); // 1
-    checking_output_msg.data.data[1] = fabs(current_rps2); // 2
-    checking_output_msg.data.data[2] = fabs(current_rps3); // 3
-    checking_output_msg.data.data[3] = fabs(current_rps4); // 4
-
-    RCSOFTCHECK(rcl_publish(&checking_output_motor, &checking_output_msg, NULL));
-
     prevT = currT;
 
     uint8_t system, gyro, accel, mag = 0;
     bno.getCalibration(&system, &gyro, &accel, &mag);
+}
+
+void freedriveUpperRobot()
+{
+    // pos[4] = 0;
+    setMotor(catcher_cw, catcher_ccw, 0);
+    setMotor(dribble_cw, dribble_ccw, 0);
+
+    checking_input_msg.data.data[0] = 404;
+    checking_input_msg.data.data[1] = 404;
+    checking_input_msg.data.data[2] = 404;
+    checking_input_msg.data.data[3] = 404;
+
+    RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
 }
 
 void publishData()
@@ -410,10 +496,96 @@ void publishData()
     RCSOFTCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
 }
 
-void twistCallback(const void *msgin)
+bool createEntities()
 {
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-    prev_cmd_time = millis();
+
+    allocator = rcl_get_default_allocator();
+
+    // create init_options
+    RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+
+    // create node
+    RCCHECK(rclc_node_init_default(&node, "hardware_node", "", &support));
+
+    // create subscriber
+    executor = rclc_executor_get_zero_initialized_executor();
+    RCCHECK(rclc_subscription_init_default(
+        &twist_subscriber,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        "omni_cont/cmd_vel"));
+
+    RCCHECK(rclc_subscription_init_default(
+        &auto_dribble_cmd,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "cmd_dribble"));
+
+    RCCHECK(rclc_subscription_init_default(
+        &allbutton,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "allbutton"));
+
+    RCCHECK(rclc_subscription_init_default(
+        &laser_sub,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "laser_indicator"));
+
+    // create executor
+    RCCHECK(rclc_executor_init(&executor, &support.context, 9, &allocator));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &laser_sub,
+        &laser_msg,
+        &laser_callback,
+        ON_NEW_DATA));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &allbutton,
+        &allbutton_msg,
+        &allbuttonCallback,
+        ON_NEW_DATA));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &auto_dribble_cmd,
+        &cmd_dribble_msg,
+        &autodribbleCallback,
+        ON_NEW_DATA));
+
+    RCCHECK(rclc_executor_add_subscription(
+        &executor,
+        &twist_subscriber,
+        &twist_msg,
+        &twistCallback,
+        ON_NEW_DATA));
+
+    // create publisher
+    RCCHECK(rclc_publisher_init_default(
+        &checking_input_motor,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
+        "checking_input"));
+    checking_input_msg.data.data = (float *)malloc(4 * sizeof(float)); // Sesuaikan jumlah elemen
+    checking_input_msg.data.size = 4;
+    RCCHECK(rclc_publisher_init_default(
+        &imu_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
+        "imu/data"));
+
+    RCCHECK(rclc_publisher_init_default(
+        &odom_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(nav_msgs, msg, Odometry),
+        "odom/unfiltered"));
+    syncTime();
+    digitalWrite(LED_PIN, HIGH);
+    return true;
 }
 
 bool destroyEntities()
@@ -421,29 +593,17 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    // rcl_publisher_fini(&odom_publisher, &node);
-    // rcl_publisher_fini(&imu_publisher, &node);
-    // rcl_subscription_fini(&twist_subscriber, &node);
-    // rcl_node_fini(&node);
-    // rcl_timer_fini(&control_timer);
+    RCCHECK(rcl_publisher_fini(&odom_publisher, &node));
+    RCCHECK(rcl_publisher_fini(&imu_publisher, &node));
+    RCCHECK(rcl_subscription_fini(&twist_subscriber, &node));
+    RCCHECK(rcl_node_fini(&node));
+    RCCHECK(rcl_timer_fini(&control_timer));
     rclc_executor_fini(&executor);
     rclc_support_fini(&support);
 
     digitalWrite(LED_PIN, HIGH);
 
     return true;
-}
-
-void fullStop()
-{
-    twist_msg.linear.x = 0.0;
-    twist_msg.linear.y = 0.0;
-    twist_msg.angular.z = 0.0;
-
-    setMotor(cw[0], ccw[0], 0);
-    setMotor(cw[1], ccw[1], 0);
-    setMotor(cw[2], ccw[2], 0);
-    setMotor(cw[3], ccw[3], 0);
 }
 
 void syncTime()
@@ -454,6 +614,115 @@ void syncTime()
     unsigned long long ros_time_ms = rmw_uros_epoch_millis();
     // now we can find the difference between ROS time and uC time
     time_offset = ros_time_ms - now;
+}
+
+void error_loop()
+{
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    delay(100);
+}
+
+void subscription_callback(const void *msgin)
+{
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    button_msg = *msg;
+}
+
+void twistCallback(const void *msgin)
+{
+    const geometry_msgs__msg__Twist *msg = (const geometry_msgs__msg__Twist *)msgin;
+    twist_msg = *msg;
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    prev_cmd_time = millis();
+}
+void autodribbleCallback(const void *msgin)
+{
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    cmd_dribble_msg = *msg;
+}
+bool button_push = false;
+int increment = 0;
+void laser_callback(const void *msgin)
+{
+
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    laser_msg = *msg;
+    if (laser_msg.data == 1)
+    {
+        digitalWrite(laser1, 1);
+        digitalWrite(laser2, 1);
+    }
+    else if (laser_msg.data == 0)
+    {
+        digitalWrite(laser1, 0);
+        digitalWrite(laser2, 0);
+    }
+}
+void allbuttonCallback(const void *msgin)
+{
+    const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
+    allbutton_msg = *msg;
+    switch (allbutton_msg.data)
+    {
+    case 0:
+        button.A = 1;
+        break;
+    case 1:
+        button.B = 1;
+        break;
+    case 3:
+        button.X = 1;
+        break;
+    case 4:
+        button.Y = 1;
+        break;
+    case 6:
+        button.LB = 1;
+        break;
+    case 7:
+        button.RB = 1;
+        break;
+    case 8:
+        button.LT = 1;
+        break;
+    case 9:
+        button.RT = 1;
+        break;
+    case 10:
+        button.select = 1;
+        break;
+    case 11:
+        button.start = 1;
+        break;
+    case 12:
+        button.home = 1;
+        break;
+    default:
+        button.A = 0;
+        button.B = 0;
+        button.X = 0;
+        button.Y = 0;
+        button.LB = 0;
+        button.RB = 0;
+        button.LT = 0;
+        button.RT = 0;
+        button.select = 0;
+        button.start = 0;
+        button.home = 0;
+        break;
+    }
+    if (button.start == 1 && button_push == false)
+    {
+        digitalWrite(solenoid, 1);
+        delay(500);
+        digitalWrite(solenoid, 0);
+        delay(100);
+        button_push = true;
+    }
+    else if (button.start == 0)
+    {
+        button_push = false;
+    }
 }
 
 struct timespec getTime()
@@ -479,7 +748,41 @@ void flashLED(int n_times)
     }
     delay(1000);
 }
-void rclErrorLoop()
+
+void breakMotor(int cwPin, int ccwPin, float pwmVal)
 {
-    flashLED(2);
+    analogWrite(cwPin, pwmVal);
+    analogWrite(ccwPin, pwmVal);
+}
+
+void setMotor(int cwPin, int ccwPin, float pwmVal)
+{
+    if (pwmVal > 0)
+    {
+        analogWrite(cwPin, fabs(pwmVal));
+        analogWrite(ccwPin, 0);
+    }
+    else if (pwmVal < 0)
+    {
+        analogWrite(cwPin, 0);
+        analogWrite(ccwPin, fabs(pwmVal));
+    }
+    else
+    {
+        analogWrite(cwPin, 0);
+        analogWrite(ccwPin, 0);
+    }
+}
+template <int j>
+void readEncoder()
+{
+    int b = digitalRead(encb[j]);
+    if (b > 0)
+    {
+        pos[j]++;
+    }
+    else
+    {
+        pos[j]--;
+    }
 }
