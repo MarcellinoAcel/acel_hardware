@@ -348,6 +348,25 @@ void dribble_call(float target, float pwm)
     setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
     dribble_prevT = dribble_currT;
 }
+
+void diribble_pneumatic(){
+
+  if (button.RT == 1 && one_cycle == false) {
+    digitalWrite(cylinder_upper, 1);
+    delay(10);
+    digitalWrite(cylinder_side, 0);
+    delay(100);
+    digitalWrite(cylinder_upper, 0);
+    // sensor_detected += 1;
+    // delay(500);
+    // digitalWrite(cylinder_side, 1);
+    one_cycle = true;
+  }
+  else if (prox_read == 1 && one_cycle == true) {
+    digitalWrite(cylinder_side, 0);
+    one_cycle = false;
+  }
+}
 bool buttonPressed = false;
 void upperRobot()
 {
