@@ -80,6 +80,7 @@ void autodribbleCallback(const void *msgin);
 void allbuttonCallback(const void *msgin);
 void laser_callback(const void *msgin);
 void freedriveUpperRobot();
+void diribble_pneumatic();
 
 void dribble_call(float target_angle, float pwm);
 void upperRobot();
@@ -240,29 +241,10 @@ void loop()
         EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
         if (state == AGENT_CONNECTED)
         {
-            int trig_end_limit = digitalRead(prox_end);
-            int trig_start_limit = digitalRead(prox_start);
-
-            if ((trig_end_limit == 0 || trig_start_limit == 0) &&
-                !(button.start == 1 || button.LT == 1))
-            {
-                setMotor(catcher_cw, catcher_ccw, 0);
-            }
             RCCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(1)));
             publishData();
             moveBase();
-            upperRobot();
-            if (button.select == 1)
-            {
-                freedriveUpperRobot();
-            }
-
-            checking_input_msg.data.data[0] = toDeg(dribble.get_deg2Targt()); // 1
-            checking_input_msg.data.data[1] = toDeg(pos[4]);                  // 2
-            checking_input_msg.data.data[2] = 0;                              // 3
-            checking_input_msg.data.data[3] = 90;                             // 4
-
-            RCSOFTCHECK(rcl_publish(&checking_input_motor, &checking_input_msg, NULL));
+            diribble_pneumatic();
         }
         break;
     case AGENT_DISCONNECTED:
@@ -348,26 +330,37 @@ void dribble_call(float target, float pwm)
     setMotor(dribble_cw, dribble_ccw, dribble.control_angle(target, pos[4], pwm, deltaT));
     dribble_prevT = dribble_currT;
 }
-
-void diribble_pneumatic(){
-
-  if (button.RT == 1 && one_cycle == false) {
-    digitalWrite(cylinder_upper, 1);
-    delay(10);
-    digitalWrite(cylinder_side, 0);
-    delay(100);
-    digitalWrite(cylinder_upper, 0);
-    // sensor_detected += 1;
-    // delay(500);
-    // digitalWrite(cylinder_side, 1);
-    one_cycle = true;
-  }
-  else if (prox_read == 1 && one_cycle == true) {
-    digitalWrite(cylinder_side, 0);
-    one_cycle = false;
-  }
-}
 bool buttonPressed = false;
+bool one_cycle = false;
+void diribble_pneumatic()
+{
+
+    if (button.RT == 1 && buttonPressed == false)
+    {
+        cmd_to_dribble = 1;
+        buttonPressed = true;
+    }
+    else if (button.RT == 0)
+    {
+        buttonPressed = false;
+    }
+    else if (cmd_to_dribble == 1)
+    {
+        digitalWrite(cylinder_upper, 1);
+        delay(20);
+        digitalWrite(cylinder_side, 1);
+        delay(100);
+        digitalWrite(cylinder_upper, 0);
+        // sensor_detected += 1;
+        delay(400);
+        digitalWrite(cylinder_side, 0);
+        cmd_to_dribble = 0;
+    }
+    // else if (prox_read == 1 && one_cycle == true) {
+    //     digitalWrite(cylinder_side, 0);
+    //     one_cycle = false;
+    // }
+}
 void upperRobot()
 {
     if ((cmd_dribble_msg.data == 1 || button.RT == 1) && buttonPressed == false)
@@ -666,16 +659,16 @@ void laser_callback(const void *msgin)
 
     const std_msgs__msg__Int8 *msg = (const std_msgs__msg__Int8 *)msgin;
     laser_msg = *msg;
-    if (laser_msg.data == 1)
-    {
-        digitalWrite(laser1, 1);
-        digitalWrite(laser2, 1);
-    }
-    else if (laser_msg.data == 0)
-    {
-        digitalWrite(laser1, 0);
-        digitalWrite(laser2, 0);
-    }
+    // if (laser_msg.data == 1)
+    // {
+    //     digitalWrite(laser1, 1);
+    //     digitalWrite(laser2, 1);
+    // }
+    // else if (laser_msg.data == 0)
+    // {
+    //     digitalWrite(laser1, 0);
+    //     digitalWrite(laser2, 0);
+    // }
 }
 void allbuttonCallback(const void *msgin)
 {
@@ -697,7 +690,7 @@ void allbuttonCallback(const void *msgin)
         break;
     case 6:
         button.LB = 1;
-        break;
+        break;  
     case 7:
         button.RB = 1;
         break;

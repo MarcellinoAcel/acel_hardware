@@ -173,8 +173,10 @@ struct but
      int home;
 } button;
 
-int solenoid = 34;
+int solenoid = 35;
 
 int laser1 = 20;
 int laser2 = 21;
+int cylinder_upper = 21;
+int cylinder_side = 20;
 #endif
